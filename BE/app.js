@@ -1,4 +1,5 @@
 const path = require('path');
+const http = require('http');
 
 const express = require('express');
 const mongoose = require('mongoose');
@@ -7,10 +8,12 @@ const dotenv = require('dotenv');
 
 const authRoutes = require('./routes/auth');
 const feedRoutes = require('./routes/feed');
+const socket = require('./socket');
 
 dotenv.config();
 
 const app = express();
+const server = http.createServer(app);
 const port = process.env.PORT || 8080;
 const mongoDbUri = process.env.MONGODB_URI;
 
@@ -49,7 +52,13 @@ if (!mongoDbUri) {
 const startServer = async () => {
   try {
     await mongoose.connect(mongoDbUri);
-    app.listen(port, () => {
+    const io = socket.init(server);
+
+    io.on('connection', client => {
+      console.log(`Socket client connected: ${client.id}`);
+    });
+
+    server.listen(port, () => {
       console.log(`Server is running on port ${port}`);
     });
   } catch (err) {

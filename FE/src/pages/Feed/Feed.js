@@ -1,4 +1,5 @@
 import React, { Component, Fragment } from 'react';
+import openSocket from 'socket.io-client';
 
 import Post from '../../components/Feed/Post/Post';
 import Button from '../../components/Button/Button';
@@ -23,7 +24,26 @@ class Feed extends Component {
   };
 
   componentDidMount() {
+    this.socket = openSocket(API_URL);
+    this.socket.on('posts', data => {
+      if (data.action === 'create') {
+        this.addPost(data.post);
+      }
+      if (data.action === 'update') {
+        this.updatePost(data.post);
+      }
+      if (data.action === 'delete') {
+        this.removePost(data.post._id);
+      }
+    });
+
     this.loadInitialData();
+  }
+
+  componentWillUnmount() {
+    if (this.socket) {
+      this.socket.disconnect();
+    }
   }
 
   loadInitialData = async () => {
@@ -108,6 +128,67 @@ class Feed extends Component {
     this.setState({ isEditing: true });
   };
 
+  addPost = post => {
+    this.setState(prevState => {
+      const postAlreadyExists = prevState.posts.some(
+        existingPost => existingPost._id === post._id
+      );
+
+      if (postAlreadyExists) {
+        return null;
+      }
+
+      const totalPosts = prevState.totalPosts + 1;
+
+      if (prevState.postPage !== 1) {
+        return { totalPosts };
+      }
+
+      return {
+        posts: [post, ...prevState.posts].slice(0, 2),
+        totalPosts
+      };
+    });
+  };
+
+  updatePost = post => {
+    this.setState(prevState => {
+      const postIndex = prevState.posts.findIndex(
+        existingPost => existingPost._id === post._id
+      );
+
+      if (postIndex < 0) {
+        return null;
+      }
+
+      const updatedPosts = [...prevState.posts];
+      updatedPosts[postIndex] = post;
+
+      return {
+        posts: updatedPosts
+      };
+    });
+  };
+
+  removePost = postId => {
+    this.setState(prevState => {
+      const postExists = prevState.posts.some(post => post._id === postId);
+      const totalPosts = Math.max(prevState.totalPosts - 1, 0);
+
+      if (!postExists) {
+        return {
+          totalPosts
+        };
+      }
+
+      return {
+        posts: prevState.posts.filter(post => post._id !== postId),
+        totalPosts,
+        postsLoading: false
+      };
+    });
+  };
+
   startEditPostHandler = postId => {
     this.setState(prevState => {
       const loadedPost = { ...prevState.posts.find(p => p._id === postId) };
@@ -124,6 +205,8 @@ class Feed extends Component {
   };
 
   finishEditHandler = async postData => {
+    const wasEditing = !!this.state.editPost;
+
     this.setState({
       editLoading: true
     });
@@ -173,8 +256,6 @@ class Feed extends Component {
             p => p._id === prevState.editPost._id
           );
           updatedPosts[postIndex] = post;
-        } else if (prevState.posts.length < 2) {
-          updatedPosts = prevState.posts.concat(post);
         }
         return {
           posts: updatedPosts,
@@ -183,6 +264,12 @@ class Feed extends Component {
           editLoading: false
         };
       });
+
+      if (!wasEditing) {
+        this.addPost(post);
+      } else {
+        this.updatePost(post);
+      }
     } catch (err) {
       console.log(err);
       this.setState({
@@ -214,10 +301,7 @@ class Feed extends Component {
       }
 
       await res.json();
-      this.setState(prevState => {
-        const updatedPosts = prevState.posts.filter(p => p._id !== postId);
-        return { posts: updatedPosts, postsLoading: false };
-      });
+      this.removePost(postId);
     } catch (err) {
       console.log(err);
       this.setState({ postsLoading: false });

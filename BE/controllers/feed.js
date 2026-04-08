@@ -3,6 +3,7 @@ const { validationResult } = require('express-validator');
 const Post = require('../models/post');
 const User = require('../models/user');
 const clearImage = require('../util/file');
+const socket = require('../socket');
 
 const getImagePath = file => `/images/${file.filename}`;
 
@@ -64,10 +65,16 @@ exports.createPost = async (req, res, next) => {
     });
 
     const populatedPost = await createdPost.populate('creator', 'name');
+    const postData = populatedPost.toObject();
+
+    socket.getIo().emit('posts', {
+      action: 'create',
+      post: postData
+    });
 
     res.status(201).json({
       message: 'Post created successfully.',
-      post: populatedPost
+      post: postData
     });
   } catch (err) {
     if (!err.statusCode) {
@@ -152,10 +159,16 @@ exports.updatePost = async (req, res, next) => {
 
     const updatedPost = await post.save();
     await updatedPost.populate('creator', 'name');
+    const postData = updatedPost.toObject();
+
+    socket.getIo().emit('posts', {
+      action: 'update',
+      post: postData
+    });
 
     res.status(200).json({
       message: 'Post updated successfully.',
-      post: updatedPost
+      post: postData
     });
   } catch (err) {
     if (!err.statusCode) {
@@ -186,6 +199,13 @@ exports.deletePost = async (req, res, next) => {
     await Post.findByIdAndDelete(postId);
     await User.findByIdAndUpdate(req.userId, {
       $pull: { posts: postId }
+    });
+
+    socket.getIo().emit('posts', {
+      action: 'delete',
+      post: {
+        _id: postId
+      }
     });
 
     res.status(200).json({
