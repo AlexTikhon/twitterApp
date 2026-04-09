@@ -1,7 +1,7 @@
 import React, { Component } from 'react';
 
 import Image from '../../../components/Image/Image';
-import { API_URL } from '../../../config';
+import { graphqlRequest } from '../../../util/graphql';
 import './SinglePost.css';
 
 class SinglePost extends Component {
@@ -20,23 +20,31 @@ class SinglePost extends Component {
   loadPost = async () => {
     const postId = this.props.match.params.postId;
     try {
-      const res = await fetch(`${API_URL}/feed/post/${postId}`, {
-        headers: {
-          Authorization: 'Bearer ' + this.props.token
-        }
+      const data = await graphqlRequest({
+        query: `
+          query GetPost($id: ID!) {
+            post(id: $id) {
+              title
+              content
+              imageUrl
+              createdAt
+              creator {
+                name
+              }
+            }
+          }
+        `,
+        variables: {
+          id: postId
+        },
+        token: this.props.token
       });
-
-      if (res.status !== 200) {
-        throw new Error('Failed to fetch status');
-      }
-
-      const resData = await res.json();
       this.setState({
-        title: resData.post.title,
-        author: resData.post.creator.name,
-        date: new Date(resData.post.createdAt).toLocaleDateString('en-US'),
-        image: resData.post.imageUrl,
-        content: resData.post.content
+        title: data.post.title,
+        author: data.post.creator.name,
+        date: new Date(data.post.createdAt).toLocaleDateString('en-US'),
+        image: data.post.imageUrl,
+        content: data.post.content
       });
     } catch (err) {
       console.log(err);

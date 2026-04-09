@@ -9,6 +9,7 @@ import Paginator from '../../components/Paginator/Paginator';
 import Loader from '../../components/Loader/Loader';
 import ErrorHandler from '../../components/ErrorHandler/ErrorHandler';
 import { API_URL } from '../../config';
+import { graphqlRequest } from '../../util/graphql';
 import './Feed.css';
 
 class Feed extends Component {
@@ -48,18 +49,18 @@ class Feed extends Component {
 
   loadInitialData = async () => {
     try {
-      const res = await fetch(`${API_URL}/feed/status`, {
-        headers: {
-          Authorization: 'Bearer ' + this.props.token
-        }
+      const data = await graphqlRequest({
+        query: `
+          query GetStatus {
+            status {
+              status
+            }
+          }
+        `,
+        token: this.props.token
       });
 
-      if (res.status !== 200) {
-        throw new Error('Failed to fetch user status.');
-      }
-
-      const resData = await res.json();
-      this.setState({ status: resData.status });
+      this.setState({ status: data.status.status });
       await this.loadPosts();
     } catch (error) {
       this.catchError(error);
@@ -81,20 +82,35 @@ class Feed extends Component {
         this.setState({ postPage: page });
       }
 
-      const res = await fetch(`${API_URL}/feed/posts?page=${page}`, {
-        headers: {
-          Authorization: 'Bearer ' + this.props.token
-        }
+      const data = await graphqlRequest({
+        query: `
+          query GetPosts($page: Int!, $limit: Int!) {
+            posts(page: $page, limit: $limit) {
+              totalItems
+              posts {
+                _id
+                title
+                content
+                imageUrl
+                createdAt
+                creator {
+                  _id
+                  name
+                }
+              }
+            }
+          }
+        `,
+        variables: {
+          page,
+          limit: 2
+        },
+        token: this.props.token
       });
 
-      if (res.status !== 200) {
-        throw new Error('Failed to fetch posts.');
-      }
-
-      const resData = await res.json();
       this.setState({
-        posts: resData.posts,
-        totalPosts: resData.totalItems,
+        posts: data.posts.posts,
+        totalPosts: data.posts.totalItems,
         postsLoading: false
       });
     } catch (error) {
@@ -105,20 +121,21 @@ class Feed extends Component {
   statusUpdateHandler = async event => {
     event.preventDefault();
     try {
-      const res = await fetch(`${API_URL}/feed/status`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: 'Bearer ' + this.props.token
-        },
-        body: JSON.stringify({
+      const data = await graphqlRequest({
+        query: `
+          mutation UpdateStatus($status: String!) {
+            updateStatus(status: $status) {
+              status
+            }
+          }
+        `,
+        variables: {
           status: this.state.status
-        })
+        },
+        token: this.props.token
       });
 
-      if (res.status !== 200 && res.status !== 201) {
-        throw new Error("Can't update status!");
-      }
+      this.setState({ status: data.updateStatus.status });
     } catch (error) {
       this.catchError(error);
     }
@@ -204,51 +221,71 @@ class Feed extends Component {
     this.setState({ isEditing: false, editPost: null });
   };
 
+  isBase64Image = image =>
+    typeof image === 'string' && image.startsWith('data:image/');
+
   finishEditHandler = async postData => {
     const wasEditing = !!this.state.editPost;
 
     this.setState({
       editLoading: true
     });
-    let url = `${API_URL}/feed/post`;
-    let method = 'POST';
-    if (this.state.editPost) {
-      url = `${API_URL}/feed/post/${this.state.editPost._id}`;
-      method = 'PUT';
-    }
 
-    const formData = new FormData();
-    formData.append('title', postData.title);
-    formData.append('content', postData.content);
-    if (postData.image instanceof File) {
-      formData.append('image', postData.image);
-    }
-    if (this.state.editPost && this.state.editPost.imageUrl) {
-      formData.append('oldPath', this.state.editPost.imageUrl);
-    }
+    const postInput = {
+      title: postData.title,
+      content: postData.content,
+      image: this.isBase64Image(postData.image) ? postData.image : null,
+      oldImagePath:
+        this.state.editPost && !this.isBase64Image(postData.image)
+          ? this.state.editPost.imageUrl
+          : null
+    };
 
     try {
-      const res = await fetch(url, {
-        method: method,
-        headers: {
-          Authorization: 'Bearer ' + this.props.token
-        },
-        body: formData
+      const data = await graphqlRequest({
+        query: this.state.editPost
+          ? `
+              mutation UpdatePost($id: ID!, $postInput: PostInputData!) {
+                updatePost(id: $id, postInput: $postInput) {
+                  _id
+                  title
+                  content
+                  imageUrl
+                  createdAt
+                  creator {
+                    _id
+                    name
+                  }
+                }
+              }
+            `
+          : `
+              mutation CreatePost($postInput: PostInputData!) {
+                createPost(postInput: $postInput) {
+                  _id
+                  title
+                  content
+                  imageUrl
+                  createdAt
+                  creator {
+                    _id
+                    name
+                  }
+                }
+              }
+            `,
+        variables: this.state.editPost
+          ? {
+              id: this.state.editPost._id,
+              postInput
+            }
+          : {
+              postInput
+            },
+        token: this.props.token
       });
+      const post = this.state.editPost ? data.updatePost : data.createPost;
 
-      if (res.status !== 200 && res.status !== 201) {
-        throw new Error('Creating or editing a post failed!');
-      }
-
-      const resData = await res.json();
-      const post = {
-        _id: resData.post._id,
-        title: resData.post.title,
-        content: resData.post.content,
-        imageUrl: resData.post.imageUrl,
-        creator: resData.post.creator,
-        createdAt: resData.post.createdAt
-      };
       this.setState(prevState => {
         let updatedPosts = [...prevState.posts];
         if (prevState.editPost) {
@@ -282,25 +319,23 @@ class Feed extends Component {
   };
 
   statusInputChangeHandler = (input, value) => {
-    void input;
-    this.setState({ status: value });
+    this.setState({ [input]: value });
   };
 
   deletePostHandler = async postId => {
     this.setState({ postsLoading: true });
     try {
-      const res = await fetch(`${API_URL}/feed/post/${postId}`, {
-        method: 'DELETE',
-        headers: {
-          Authorization: 'Bearer ' + this.props.token
-        }
+      await graphqlRequest({
+        query: `
+          mutation DeletePost($id: ID!) {
+            deletePost(id: $id)
+          }
+        `,
+        variables: {
+          id: postId
+        },
+        token: this.props.token
       });
-
-      if (res.status !== 200 && res.status !== 201) {
-        throw new Error('Deleting a post failed!');
-      }
-
-      await res.json();
       this.removePost(postId);
     } catch (err) {
       console.log(err);
@@ -330,6 +365,7 @@ class Feed extends Component {
         <section className="feed__status">
           <form onSubmit={this.statusUpdateHandler}>
             <Input
+              id="status"
               type="text"
               placeholder="Your status"
               control="input"

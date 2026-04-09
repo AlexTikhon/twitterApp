@@ -5,9 +5,11 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const { graphqlHTTP } = require('express-graphql');
 
-const authRoutes = require('./routes/auth');
-const feedRoutes = require('./routes/feed');
+const isAuth = require('./middleware/is-auth');
+const graphqlSchema = require('./graphql/schema');
+const graphqlResolver = require('./graphql/resolvers');
 const socket = require('./socket');
 
 dotenv.config();
@@ -19,22 +21,37 @@ const mongoDbUri = process.env.MONGODB_URI;
 
 app.use(cors());
 app.use(express.json());
+app.use(isAuth);
 app.use('/images', express.static(path.join(__dirname, 'images')));
 
 app.get('/health', (req, res) => {
   res.status(200).json({ message: 'API is running' });
 });
 
-app.use('/auth', authRoutes);
-app.use('/feed', feedRoutes);
+app.use(
+  '/graphql',
+  graphqlHTTP(req => ({
+    schema: graphqlSchema,
+    rootValue: graphqlResolver,
+    graphiql: true,
+    context: req,
+    customFormatErrorFn(error) {
+      const originalError = error.originalError || {};
+
+      return {
+        message: originalError.message || error.message,
+        status: originalError.statusCode || 500,
+        data: originalError.data || null
+      };
+    }
+  }))
+);
 
 app.use((req, res) => {
   res.status(404).json({ message: 'Route not found' });
 });
 
 app.use((error, req, res, next) => {
-  void next;
-
   const status = error.statusCode || 500;
   const message = error.message || 'Internal server error';
   const data = error.data || null;

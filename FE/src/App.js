@@ -11,7 +11,7 @@ import FeedPage from './pages/Feed/Feed';
 import SinglePostPage from './pages/Feed/SinglePost/SinglePost';
 import LoginPage from './pages/Auth/Login';
 import SignupPage from './pages/Auth/Signup';
-import { API_URL } from './config';
+import { graphqlRequest } from './util/graphql';
 import './App.css';
 
 class App extends Component {
@@ -61,37 +61,28 @@ class App extends Component {
 		event.preventDefault();
 		this.setState({ authLoading: true });
 		try {
-			const res = await fetch(`${API_URL}/auth/login`, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json'
-				},
-				body: JSON.stringify(authData)
+			const data = await graphqlRequest({
+				query: `
+					mutation Login($email: String!, $password: String!) {
+						login(email: $email, password: $password) {
+							token
+							userId
+							expiresIn
+						}
+					}
+				`,
+				variables: authData
 			});
-
-			if (res.status === 422) {
-				throw new Error('Validation failed.');
-			}
-			if (res.status === 401) {
-				throw new Error('Incorrect email or password.');
-			}
-			if (res.status !== 200 && res.status !== 201) {
-				console.log('Error!');
-				throw new Error('Could not authenticate you!');
-			}
-
-			const resData = await res.json();
-			console.log(resData);
 
 			this.setState({
 				isAuth: true,
-				token: resData.token,
+				token: data.login.token,
 				authLoading: false,
-				userId: resData.userId
+				userId: data.login.userId
 			});
-			localStorage.setItem('token', resData.token);
-			localStorage.setItem('userId', resData.userId);
-			const remainingMilliseconds = 60 * 60 * 1000;
+			localStorage.setItem('token', data.login.token);
+			localStorage.setItem('userId', data.login.userId);
+			const remainingMilliseconds = data.login.expiresIn * 1000;
 			const expiryDate = new Date(new Date().getTime() + remainingMilliseconds);
 			localStorage.setItem('expiryDate', expiryDate.toISOString());
 			this.setAutoLogout(remainingMilliseconds);
@@ -109,25 +100,18 @@ class App extends Component {
 		event.preventDefault();
 		this.setState({ authLoading: true });
 		try {
-			const res = await fetch(`${API_URL}/auth/signup`, {
-				method: 'PUT',
-				headers: {
-					'Content-Type': 'application/json'
-				},
-				body: JSON.stringify(authData)
+			await graphqlRequest({
+				query: `
+					mutation CreateUser($email: String!, $name: String!, $password: String!) {
+						createUser(
+							userInput: { email: $email, name: $name, password: $password }
+						) {
+							_id
+						}
+					}
+				`,
+				variables: authData
 			});
-
-			if (res.status === 422 || res.status === 409) {
-				throw new Error(
-					"Validation failed. Make sure the email address isn't used yet!"
-				);
-			}
-			if (res.status !== 200 && res.status !== 201) {
-				console.log('Error!');
-				throw new Error('Creating a user failed!');
-			}
-
-			await res.json();
 			this.setState({ isAuth: false, authLoading: false });
 			this.props.history.replace('/');
 		} catch (err) {
