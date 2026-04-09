@@ -3,8 +3,11 @@ const http = require('http');
 
 const express = require('express');
 const mongoose = require('mongoose');
+const compression = require('compression');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const helmet = require('helmet');
+const morgan = require('morgan');
 const { graphqlHTTP } = require('express-graphql');
 
 const isAuth = require('./middleware/is-auth');
@@ -18,8 +21,17 @@ const app = express();
 const server = http.createServer(app);
 const port = process.env.PORT || 8080;
 const mongoDbUri = process.env.MONGODB_URI;
+const isProduction = process.env.NODE_ENV === 'production';
 
 app.use(cors());
+app.use(morgan(isProduction ? 'combined' : 'dev'));
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginResourcePolicy: { policy: 'cross-origin' }
+  })
+);
+app.use(compression());
 app.use(express.json());
 app.use(isAuth);
 app.use('/images', express.static(path.join(__dirname, 'images')));
