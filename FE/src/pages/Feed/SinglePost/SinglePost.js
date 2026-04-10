@@ -1,3 +1,4 @@
+// Loads a single post view from GraphQL using the route post id.
 import React, { Component } from 'react';
 
 import Image from '../../../components/Image/Image';

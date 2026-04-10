@@ -1,3 +1,4 @@
+// Thin wrapper around Image that enforces a square avatar size.
 import React from 'react';
 
 import Image from './Image';

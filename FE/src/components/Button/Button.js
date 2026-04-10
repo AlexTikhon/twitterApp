@@ -1,3 +1,4 @@
+// Reusable button that can render either a native button or a router link.
 import React from 'react';
 import { Link } from 'react-router-dom';
 

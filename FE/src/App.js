@@ -1,3 +1,4 @@
+// Coordinates authentication state and switches between auth routes and feed routes.
 import React, { Component, Fragment } from 'react';
 import { Route, Switch, Redirect, withRouter } from 'react-router-dom';
 
@@ -26,6 +27,7 @@ class App extends Component {
 	};
 
 	componentDidMount() {
+		// Reuse the saved session until the stored expiry time has passed.
 		const token = localStorage.getItem('token');
 		const expiryDate = localStorage.getItem('expiryDate');
 		if (!token || !expiryDate) {
@@ -82,6 +84,7 @@ class App extends Component {
 			});
 			localStorage.setItem('token', data.login.token);
 			localStorage.setItem('userId', data.login.userId);
+			// The backend returns the token lifetime in seconds.
 			const remainingMilliseconds = data.login.expiresIn * 1000;
 			const expiryDate = new Date(new Date().getTime() + remainingMilliseconds);
 			localStorage.setItem('expiryDate', expiryDate.toISOString());
@@ -125,6 +128,7 @@ class App extends Component {
 	};
 
 	setAutoLogout = milliseconds => {
+		// The timeout mirrors the JWT expiry so stale tokens are cleared automatically.
 		setTimeout(() => {
 			this.logoutHandler();
 		}, milliseconds);
@@ -161,6 +165,7 @@ class App extends Component {
 			</Switch>
 		);
 		if (this.state.isAuth) {
+			// Authenticated users can access the feed and individual post pages.
 			routes = (
 				<Switch>
 					<Route

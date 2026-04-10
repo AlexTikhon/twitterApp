@@ -1,3 +1,4 @@
+// Desktop navigation bar plus the toggle that opens the mobile menu.
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 

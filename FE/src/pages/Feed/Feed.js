@@ -1,3 +1,4 @@
+// Owns the timeline UI, GraphQL feed operations, and realtime socket updates.
 import React, { Component, Fragment } from 'react';
 import openSocket from 'socket.io-client';
 
@@ -26,6 +27,7 @@ class Feed extends Component {
 
   componentDidMount() {
     this.socket = openSocket(API_URL);
+    // Socket events keep the visible page in sync after create, update, and delete actions.
     this.socket.on('posts', data => {
       if (data.action === 'create') {
         this.addPost(data.post);
@@ -61,6 +63,7 @@ class Feed extends Component {
       });
 
       this.setState({ status: data.status.status });
+      // The status query and first posts query are separated to keep the UI responsive.
       await this.loadPosts();
     } catch (error) {
       this.catchError(error);
@@ -73,6 +76,7 @@ class Feed extends Component {
         this.setState({ postsLoading: true, posts: [] });
       }
       let page = this.state.postPage;
+      // Pagination is driven locally and then mirrored in the GraphQL query variables.
       if (direction === 'next') {
         page++;
         this.setState({ postPage: page });
@@ -157,6 +161,7 @@ class Feed extends Component {
 
       const totalPosts = prevState.totalPosts + 1;
 
+      // Only the first page inserts the new item immediately into the visible list.
       if (prevState.postPage !== 1) {
         return { totalPosts };
       }
@@ -234,6 +239,7 @@ class Feed extends Component {
     const postInput = {
       title: postData.title,
       content: postData.content,
+      // New files arrive as base64 strings; existing posts reuse their old image path.
       image: this.isBase64Image(postData.image) ? postData.image : null,
       oldImagePath:
         this.state.editPost && !this.isBase64Image(postData.image)

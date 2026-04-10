@@ -1,3 +1,4 @@
+// Builds the nav links based on whether the user is authenticated.
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 

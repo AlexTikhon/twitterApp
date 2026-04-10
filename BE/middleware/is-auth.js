@@ -1,3 +1,4 @@
+// Reads the bearer token once per request and stores the auth state on req.
 const jwt = require('jsonwebtoken');
 
 module.exports = (req, res, next) => {

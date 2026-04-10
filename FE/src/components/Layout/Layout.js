@@ -1,3 +1,4 @@
+// Global page shell with the header, mobile nav slot, and main content area.
 import React, { Fragment } from 'react';
 
 import './Layout.css';

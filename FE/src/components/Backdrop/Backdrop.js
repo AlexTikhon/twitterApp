@@ -1,3 +1,4 @@
+// Shared overlay rendered through a portal behind modals and mobile navigation.
 import React from 'react';
 import ReactDOM from 'react-dom';
 

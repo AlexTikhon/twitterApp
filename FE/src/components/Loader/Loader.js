@@ -1,3 +1,4 @@
+// Small loading indicator used while feed and modal requests are in flight.
 import React from 'react';
 
 import './Loader.css';

@@ -1,3 +1,4 @@
+// Simple container for aligning the main navigation content.
 import React from 'react';
 
 import './Toolbar.css';

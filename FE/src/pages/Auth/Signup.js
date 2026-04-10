@@ -1,3 +1,4 @@
+// Handles the signup form state before App sends the GraphQL mutation.
 import React, { Component } from 'react';
 
 import Input from '../../components/Form/Input/Input';
@@ -44,6 +45,7 @@ class Signup extends Component {
           value: value
         }
       };
+      // The submit button uses the aggregated validity of all visible fields.
       let formIsValid = true;
       for (const inputName in updatedForm) {
         formIsValid = formIsValid && updatedForm[inputName].valid;

@@ -1,3 +1,4 @@
+// Handles the login form state and delegates the actual request to App.
 import React, { Component } from 'react';
 
 import Input from '../../components/Form/Input/Input';
@@ -38,6 +39,7 @@ class Login extends Component {
           value: value
         }
       };
+      // The submit button uses the aggregated validity of all visible fields.
       let formIsValid = true;
       for (const inputName in updatedForm) {
         formIsValid = formIsValid && updatedForm[inputName].valid;

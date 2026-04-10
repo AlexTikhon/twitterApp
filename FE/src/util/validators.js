@@ -1,3 +1,4 @@
+// Small reusable validators keep form validation logic declarative in the pages.
 export const required = value => value.trim() !== '';
 
 export const length = config => value => {

@@ -1,3 +1,4 @@
+// Deletes a stored image file when a post is updated or removed.
 const fs = require('fs');
 const path = require('path');
 

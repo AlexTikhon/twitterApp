@@ -1,3 +1,4 @@
+// Defines the GraphQL contract shared by the React client and the backend.
 const { buildSchema } = require('graphql');
 
 module.exports = buildSchema(`

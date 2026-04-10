@@ -1,3 +1,4 @@
+// Shared wrapper for the login and signup forms.
 import React from 'react';
 
 import './Auth.css';

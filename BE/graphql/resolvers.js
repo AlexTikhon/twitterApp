@@ -1,3 +1,4 @@
+// Implements the GraphQL operations for auth, feed management, and user status.
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
@@ -22,6 +23,7 @@ const normalizeString = value =>
 const validateEmail = email =>
   /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeString(email));
 
+// Queries and mutations that need the current user fail fast here.
 const ensureAuth = req => {
   if (!req.isAuth) {
     throw createError('Not authenticated.', 401);
@@ -113,6 +115,7 @@ const getCreatorId = creator => {
   return creator.toString();
 };
 
+// Mongoose documents are converted into plain GraphQL-friendly objects here.
 const transformPost = post => ({
   ...post._doc,
   _id: post._id.toString(),
@@ -146,6 +149,8 @@ const posts = async postIds => {
   return foundPosts.map(transformPost);
 };
 
+// Socket payloads are resolved with a populated creator so the client can
+// update the feed immediately without issuing another query.
 const getSocketPostPayload = async postId => {
   const populatedPost = await Post.findById(postId).populate('creator', 'name');
 
@@ -165,6 +170,7 @@ const getSocketPostPayload = async postId => {
   };
 };
 
+// New images arrive as base64 strings; existing posts can keep their old path.
 const resolveImagePath = async (image, oldImagePath, currentImagePath = '') => {
   if (image && image.startsWith('data:image/')) {
     return saveImageFromBase64(image);
@@ -298,6 +304,7 @@ module.exports = {
     });
 
     const socketPost = await getSocketPostPayload(createdPost._id);
+    // Broadcast the freshly created post so every connected feed stays in sync.
     socket.getIo().emit('posts', {
       action: 'create',
       post: socketPost
@@ -330,6 +337,7 @@ module.exports = {
     }
 
     if (imageUrl !== post.imageUrl) {
+      // Replaced images are removed from disk to avoid orphaned files.
       clearImage(post.imageUrl);
     }
 
@@ -340,6 +348,7 @@ module.exports = {
     await post.save();
 
     const socketPost = await getSocketPostPayload(post._id);
+    // Send the updated post snapshot so clients can patch it in place.
     socket.getIo().emit('posts', {
       action: 'update',
       post: socketPost

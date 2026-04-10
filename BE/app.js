@@ -1,3 +1,4 @@
+// Bootstraps the Express app, GraphQL endpoint, static assets, and socket server.
 const path = require('path');
 const http = require('http');
 
@@ -25,6 +26,8 @@ const isProduction = process.env.NODE_ENV === 'production';
 
 app.use(cors());
 app.use(morgan(isProduction ? 'combined' : 'dev'));
+// Helmet and compression are applied before the API handlers so every response
+// gets the security headers and compression settings consistently.
 app.use(
   helmet({
     contentSecurityPolicy: false,
@@ -40,6 +43,7 @@ app.get('/health', (req, res) => {
   res.status(200).json({ message: 'API is running' });
 });
 
+// GraphQL becomes the single API entrypoint for auth, feed, and profile status.
 app.use(
   '/graphql',
   graphqlHTTP(req => ({
@@ -78,6 +82,8 @@ if (!mongoDbUri) {
   throw new Error('MONGODB_URI is missing. Add it to your .env file.');
 }
 
+// The HTTP server is shared with Socket.IO so GraphQL and realtime updates use
+// the same origin and port.
 const startServer = async () => {
   try {
     await mongoose.connect(mongoDbUri);

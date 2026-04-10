@@ -1,3 +1,4 @@
+// Stores login credentials plus the profile status displayed in the feed.
 const mongoose = require('mongoose');
 
 const { Schema } = mongoose;

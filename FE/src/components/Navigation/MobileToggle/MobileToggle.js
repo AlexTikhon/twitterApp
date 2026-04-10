@@ -1,3 +1,4 @@
+// Hamburger button that toggles the mobile navigation drawer.
 import React from 'react';
 
 import './MobileToggle.css';

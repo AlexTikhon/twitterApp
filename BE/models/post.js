@@ -1,3 +1,4 @@
+// Stores the feed entries shown in the timeline and single-post pages.
 const mongoose = require('mongoose');
 
 const { Schema } = mongoose;

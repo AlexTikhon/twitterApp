@@ -1,3 +1,4 @@
+// Minimal brand mark reused in the main navigation.
 import React from 'react';
 
 import './Logo.css';

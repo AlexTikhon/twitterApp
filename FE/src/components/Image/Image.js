@@ -1,3 +1,4 @@
+// Resolves relative backend image paths into full URLs before rendering them.
 import React from 'react';
 
 import { API_URL } from '../../config';

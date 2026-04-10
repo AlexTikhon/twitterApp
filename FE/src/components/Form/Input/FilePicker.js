@@ -1,3 +1,4 @@
+// Specialized input for selecting an image file in the post editor.
 import React from 'react';
 
 import './Input.css';

@@ -1,3 +1,4 @@
+// Modal form used for both creating a post and editing an existing one.
 import React, { Component, Fragment } from 'react';
 
 import Backdrop from '../../Backdrop/Backdrop';
@@ -37,6 +38,7 @@ class FeedEdit extends Component {
 	};
 
 	componentDidUpdate(prevProps, prevState) {
+		// Opening the modal for a new post resets the form to its empty state.
 		if (this.props.editing && prevProps.editing !== this.props.editing && !this.props.selectedPost) {
 			this.setState({
 				postForm: POST_FORM,
@@ -71,6 +73,7 @@ class FeedEdit extends Component {
 			this.setState({
 				postForm: postForm,
 				formIsValid: true,
+				// Existing posts show the stored image immediately in the preview area.
 				imagePreview: this.props.selectedPost.imageUrl || null
 			});
 		}
@@ -81,6 +84,7 @@ class FeedEdit extends Component {
 
 		if (files && files.length > 0) {
 			try {
+				// Image files are converted to base64 because the project now uploads via GraphQL.
 				const b64 = await generateBase64FromImage(files[0]);
 				updatedValue = b64;
 				this.setState({ imagePreview: b64 });
@@ -102,6 +106,7 @@ class FeedEdit extends Component {
 					value: updatedValue
 				}
 			};
+			// The modal accept button only unlocks when every field is valid.
 			let formIsValid = true;
 			for (const inputName in updatedForm) {
 				formIsValid = formIsValid && updatedForm[inputName].valid;

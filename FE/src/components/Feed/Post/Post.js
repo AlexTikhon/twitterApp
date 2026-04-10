@@ -1,3 +1,4 @@
+// Renders the compact post card used inside the paginated feed list.
 import React from 'react';
 
 import Button from '../../Button/Button';

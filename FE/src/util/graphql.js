@@ -1,3 +1,4 @@
+// Sends GraphQL requests and normalizes backend errors into thrown JS errors.
 import { GRAPHQL_URL } from '../config';
 
 export const graphqlRequest = async ({ query, variables = {}, token }) => {

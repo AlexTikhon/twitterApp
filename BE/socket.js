@@ -1,3 +1,4 @@
+// Creates a single shared Socket.IO instance for the whole backend.
 const socketIo = require('socket.io');
 
 let io;

@@ -1,3 +1,4 @@
+// Shows application errors inside the shared modal UI.
 import React, { Fragment } from 'react';
 
 import Backdrop from '../Backdrop/Backdrop';

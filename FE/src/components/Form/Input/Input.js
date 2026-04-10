@@ -1,3 +1,4 @@
+// Generic form control used by auth forms, status input, and post editor fields.
 import React from 'react';
 
 import './Input.css';

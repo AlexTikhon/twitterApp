@@ -1,3 +1,4 @@
+// Wraps feed content with previous/next controls for the current page.
 import React from 'react';
 
 import './Paginator.css';

@@ -1,3 +1,4 @@
+// Saves a base64-encoded image from GraphQL into the backend images folder.
 const fs = require('fs');
 const path = require('path');
 

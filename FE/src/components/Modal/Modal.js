@@ -1,3 +1,4 @@
+// Shared modal window rendered through a portal so it can escape page layout constraints.
 import React from 'react';
 import ReactDOM from 'react-dom';
 
