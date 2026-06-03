@@ -9,11 +9,12 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const helmet = require('helmet');
 const morgan = require('morgan');
-const { graphqlHTTP } = require('express-graphql');
+const { ApolloServer } = require('@apollo/server');
+const { expressMiddleware } = require('@as-integrations/express4');
 
 const isAuth = require('./middleware/is-auth');
-const graphqlSchema = require('./graphql/schema');
-const graphqlResolver = require('./graphql/resolvers');
+const typeDefs = require('./graphql/schema');
+const resolvers = require('./graphql/resolvers');
 const socket = require('./socket');
 
 dotenv.config();
@@ -43,31 +44,11 @@ app.get('/health', (req, res) => {
   res.status(200).json({ message: 'API is running' });
 });
 
-// GraphQL becomes the single API entrypoint for auth, feed, and profile status.
-app.use(
-  '/graphql',
-  graphqlHTTP(req => ({
-    schema: graphqlSchema,
-    rootValue: graphqlResolver,
-    graphiql: true,
-    context: req,
-    customFormatErrorFn(error) {
-      const originalError = error.originalError || {};
-
-      return {
-        message: originalError.message || error.message,
-        status: originalError.statusCode || 500,
-        data: originalError.data || null
-      };
-    }
-  }))
-);
-
-app.use((req, res) => {
+const notFoundHandler = (req, res) => {
   res.status(404).json({ message: 'Route not found' });
-});
+};
 
-app.use((error, req, res, next) => {
+const errorHandler = (error, req, res, next) => {
   const status = error.statusCode || 500;
   const message = error.message || 'Internal server error';
   const data = error.data || null;
@@ -76,7 +57,7 @@ app.use((error, req, res, next) => {
     message,
     data
   });
-});
+};
 
 if (!mongoDbUri) {
   throw new Error('MONGODB_URI is missing. Add it to your .env file.');
@@ -87,6 +68,34 @@ if (!mongoDbUri) {
 const startServer = async () => {
   try {
     await mongoose.connect(mongoDbUri);
+
+    const apolloServer = new ApolloServer({
+      typeDefs,
+      resolvers,
+      formatError(formattedError, error) {
+        const originalError = error.originalError || {};
+
+        return {
+          message: originalError.message || formattedError.message,
+          status: originalError.statusCode || 500,
+          data: originalError.data || null
+        };
+      }
+    });
+
+    await apolloServer.start();
+
+    // GraphQL is the single API entrypoint for auth, feed, and profile status.
+    app.use(
+      '/graphql',
+      expressMiddleware(apolloServer, {
+        context: async ({ req }) => ({ req })
+      })
+    );
+
+    app.use(notFoundHandler);
+    app.use(errorHandler);
+
     const io = socket.init(server);
 
     io.on('connection', client => {

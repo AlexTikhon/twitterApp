@@ -187,7 +187,7 @@ const resolveImagePath = async (image, oldImagePath, currentImagePath = '') => {
   return currentImagePath;
 };
 
-module.exports = {
+const rootResolvers = {
   createUser: async ({ userInput }) => {
     const validatedUserInput = validateUserInput(userInput);
 
@@ -400,5 +400,24 @@ module.exports = {
     return {
       status: foundUser.status
     };
+  }
+};
+
+const withRequest = resolver => (parent, args, context) =>
+  resolver(args, context.req);
+
+module.exports = {
+  RootQuery: {
+    posts: withRequest(rootResolvers.posts),
+    post: withRequest(rootResolvers.post),
+    status: withRequest(rootResolvers.status)
+  },
+  RootMutation: {
+    createUser: withRequest(rootResolvers.createUser),
+    login: withRequest(rootResolvers.login),
+    createPost: withRequest(rootResolvers.createPost),
+    updatePost: withRequest(rootResolvers.updatePost),
+    deletePost: withRequest(rootResolvers.deletePost),
+    updateStatus: withRequest(rootResolvers.updateStatus)
   }
 };

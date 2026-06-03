@@ -1,7 +1,5 @@
 // Defines the GraphQL contract shared by the React client and the backend.
-const { buildSchema } = require('graphql');
-
-module.exports = buildSchema(`
+module.exports = `
   type User {
     _id: ID!
     email: String!
@@ -69,4 +67,4 @@ module.exports = buildSchema(`
     query: RootQuery
     mutation: RootMutation
   }
-`);
+`;
