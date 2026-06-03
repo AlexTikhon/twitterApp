@@ -8,6 +8,7 @@ const clearImage = require('../util/file');
 const saveImageFromBase64 = require('../util/image');
 const socket = require('../socket');
 
+// Creates an error object carrying HTTP-like metadata for Apollo formatting.
 const createError = (message, statusCode, data = null) => {
   const error = new Error(message);
   error.statusCode = statusCode;
@@ -15,11 +16,14 @@ const createError = (message, statusCode, data = null) => {
   return error;
 };
 
+// Serializes MongoDB dates into ISO strings for GraphQL responses.
 const formatDate = date => new Date(date).toISOString();
 
+// Trims strings safely while converting non-strings to an empty value.
 const normalizeString = value =>
   typeof value === 'string' ? value.trim() : '';
 
+// Checks whether a normalized email has a basic valid email shape.
 const validateEmail = email =>
   /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeString(email));
 
@@ -30,6 +34,7 @@ const ensureAuth = req => {
   }
 };
 
+// Validates and normalizes signup input before creating a user.
 const validateUserInput = userInput => {
   const email = normalizeString(userInput.email).toLowerCase();
   const password = normalizeString(userInput.password);
@@ -62,6 +67,7 @@ const validateUserInput = userInput => {
   };
 };
 
+// Validates and normalizes post form input before persistence.
 const validatePostInput = postInput => {
   const title = normalizeString(postInput.title);
   const content = normalizeString(postInput.content);
@@ -99,6 +105,7 @@ const validatePostInput = postInput => {
   };
 };
 
+// Extracts a user id from populated, unpopulated, or string creator values.
 const getCreatorId = creator => {
   if (!creator) {
     return '';
@@ -124,6 +131,7 @@ const transformPost = post => ({
   creator: user.bind(this, getCreatorId(post.creator))
 });
 
+// Converts a Mongoose user document into the GraphQL user response shape.
 const transformUser = userDoc => ({
   ...userDoc._doc,
   _id: userDoc._id.toString(),
@@ -133,6 +141,7 @@ const transformUser = userDoc => ({
   posts: posts.bind(this, userDoc._doc.posts)
 });
 
+// Loads a user for nested GraphQL creator/post fields.
 const user = async userId => {
   const foundUser = await User.findById(userId);
 
@@ -143,6 +152,7 @@ const user = async userId => {
   return transformUser(foundUser);
 };
 
+// Loads posts for nested GraphQL user.posts fields.
 const posts = async postIds => {
   const foundPosts = await Post.find({ _id: { $in: postIds } });
 
@@ -188,6 +198,7 @@ const resolveImagePath = async (image, oldImagePath, currentImagePath = '') => {
 };
 
 const rootResolvers = {
+  // Registers a new account after validating and hashing the supplied password.
   createUser: async ({ userInput }) => {
     const validatedUserInput = validateUserInput(userInput);
 
@@ -207,6 +218,7 @@ const rootResolvers = {
     const createdUser = await user.save();
     return transformUser(createdUser);
   },
+  // Authenticates a user and returns a short-lived JWT session payload.
   login: async ({ email, password }) => {
     const normalizedEmail = normalizeString(email).toLowerCase();
     const normalizedPassword = normalizeString(password);
@@ -236,6 +248,7 @@ const rootResolvers = {
       expiresIn: 3600
     };
   },
+  // Returns a paginated feed for the authenticated user.
   posts: async ({ page = 1, limit = 2 }, req) => {
     ensureAuth(req);
 
@@ -252,6 +265,7 @@ const rootResolvers = {
       totalItems
     };
   },
+  // Returns one post by id for the authenticated single-post page.
   post: async ({ id }, req) => {
     ensureAuth(req);
 
@@ -263,6 +277,7 @@ const rootResolvers = {
 
     return transformPost(post);
   },
+  // Returns the profile status for the authenticated user.
   status: async (args, req) => {
     ensureAuth(req);
 
@@ -276,6 +291,7 @@ const rootResolvers = {
       status: foundUser.status
     };
   },
+  // Creates a post, stores its image, links it to the user, and broadcasts it.
   createPost: async ({ postInput }, req) => {
     ensureAuth(req);
 
@@ -312,6 +328,7 @@ const rootResolvers = {
 
     return transformPost(createdPost);
   },
+  // Updates a post owned by the current user and broadcasts the new snapshot.
   updatePost: async ({ id, postInput }, req) => {
     ensureAuth(req);
 
@@ -356,6 +373,7 @@ const rootResolvers = {
 
     return transformPost(post);
   },
+  // Deletes a post owned by the current user and broadcasts the removal.
   deletePost: async ({ id }, req) => {
     ensureAuth(req);
 
@@ -384,6 +402,7 @@ const rootResolvers = {
 
     return true;
   },
+  // Updates and returns the authenticated user's profile status.
   updateStatus: async ({ status }, req) => {
     ensureAuth(req);
 
@@ -403,6 +422,7 @@ const rootResolvers = {
   }
 };
 
+// Adapts the old root resolver signature to Apollo's resolver map signature.
 const withRequest = resolver => (parent, args, context) =>
   resolver(args, context.req);
 

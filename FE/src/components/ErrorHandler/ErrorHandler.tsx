@@ -4,6 +4,7 @@ import React, { Fragment } from 'react';
 import Backdrop from '../Backdrop/Backdrop';
 import Modal from '../Modal/Modal';
 
+// Shows a modal error dialog whenever an error object is present.
 const errorHandler = props => (
   <Fragment>
     {props.error && <Backdrop onClick={props.onHandle} />}

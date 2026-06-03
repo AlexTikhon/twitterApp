@@ -15,10 +15,12 @@ class SinglePost extends Component<any, any> {
     content: ''
   };
 
+  // Fetches the post details once the route parameter is available.
   componentDidMount() {
     this.loadPost();
   }
 
+  // Loads one post by id and maps the GraphQL response into display state.
   loadPost = async () => {
     const postId = this.props.postId;
     try {
@@ -53,6 +55,7 @@ class SinglePost extends Component<any, any> {
     }
   };
 
+  // Renders the loaded post details.
   render() {
     return (
       <section className="single-post">
@@ -69,6 +72,7 @@ class SinglePost extends Component<any, any> {
   }
 }
 
+// Reads the React Router post id and passes it into the class component.
 const SinglePostWithParams = props => {
   const { postId } = useParams();
 

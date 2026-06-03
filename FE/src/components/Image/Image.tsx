@@ -4,6 +4,7 @@ import React from 'react';
 import { API_URL } from '../../config';
 import './Image.css';
 
+// Converts backend-relative image paths into URLs the browser can load.
 const resolveImageUrl = imageUrl => {
   if (!imageUrl) {
     return '';
@@ -20,6 +21,7 @@ const resolveImageUrl = imageUrl => {
   return `${API_URL}${imageUrl}`;
 };
 
+// Renders an image as a CSS background with cover/contain positioning.
 const image = props => (
   <div
     className="image"

@@ -10,6 +10,7 @@ const navItems = [
   { id: 'signup', text: 'Signup', link: '/signup', auth: false }
 ];
 
+// Filters nav links by auth state and appends the logout action when needed.
 const navigationItems = props => [
   ...navItems.filter(item => item.auth === props.isAuth).map(item => (
     <li

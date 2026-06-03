@@ -3,6 +3,7 @@ import React from 'react';
 
 import './Input.css';
 
+// Renders either a text input or textarea with validation styling.
 const input = props => (
   <div className="input">
     {props.label && <label htmlFor={props.id}>{props.label}</label>}

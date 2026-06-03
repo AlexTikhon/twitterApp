@@ -3,6 +3,7 @@ import React from 'react';
 
 import './Input.css';
 
+// Renders a file input and forwards selected files to the parent form.
 const filePicker = props => (
   <div className="input">
     <label htmlFor={props.id}>{props.label}</label>

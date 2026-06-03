@@ -4,6 +4,7 @@ import React from 'react';
 import Image from './Image';
 import './Avatar.css';
 
+// Renders a square avatar using the shared image renderer.
 const avatar = props => (
   <div
     className="avatar"

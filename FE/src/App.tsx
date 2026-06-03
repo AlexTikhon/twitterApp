@@ -26,6 +26,7 @@ class App extends Component<any, any> {
 		error: null
 	};
 
+	// Restores a saved login session when the app first mounts.
 	componentDidMount() {
 		// Reuse the saved session until the stored expiry time has passed.
 		const token = localStorage.getItem('token');
@@ -44,14 +45,17 @@ class App extends Component<any, any> {
 		this.setAutoLogout(remainingMilliseconds);
 	}
 
+	// Opens or closes the mobile navigation and matching backdrop together.
 	mobileNavHandler = isOpen => {
 		this.setState({ showMobileNav: isOpen, showBackdrop: isOpen });
 	};
 
+	// Closes transient overlay UI and clears any visible error.
 	backdropClickHandler = () => {
 		this.setState({ showBackdrop: false, showMobileNav: false, error: null });
 	};
 
+	// Clears auth state and removes the persisted session from storage.
 	logoutHandler = () => {
 		this.setState({ isAuth: false, token: null });
 		localStorage.removeItem('token');
@@ -59,6 +63,7 @@ class App extends Component<any, any> {
 		localStorage.removeItem('userId');
 	};
 
+	// Sends login credentials to GraphQL and stores the returned session.
 	loginHandler = async (event, authData) => {
 		event.preventDefault();
 		this.setState({ authLoading: true });
@@ -99,6 +104,7 @@ class App extends Component<any, any> {
 		}
 	};
 
+	// Creates a user account and sends the user back to the login route.
 	signupHandler = async (event, authData) => {
 		event.preventDefault();
 		this.setState({ authLoading: true });
@@ -127,6 +133,7 @@ class App extends Component<any, any> {
 		}
 	};
 
+	// Schedules logout when the current JWT expiry time is reached.
 	setAutoLogout = milliseconds => {
 		// The timeout mirrors the JWT expiry so stale tokens are cleared automatically.
 		setTimeout(() => {
@@ -134,10 +141,12 @@ class App extends Component<any, any> {
 		}, milliseconds);
 	};
 
+	// Clears the global error modal state.
 	errorHandler = () => {
 		this.setState({ error: null });
 	};
 
+	// Selects the route tree based on whether the user is authenticated.
 	render() {
 		let routes = (
 			<Routes>
@@ -217,6 +226,7 @@ class App extends Component<any, any> {
 	}
 }
 
+// Injects React Router navigation into the class-based App component.
 const AppWithRouter = () => {
 	const navigate = useNavigate();
 

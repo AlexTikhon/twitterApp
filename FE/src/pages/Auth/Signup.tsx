@@ -31,6 +31,7 @@ class Signup extends Component<any, any> {
     }
   };
 
+  // Updates one signup field and recalculates the form validity.
   inputChangeHandler = (input, value) => {
     this.setState(prevState => {
       let isValid = true;
@@ -57,6 +58,7 @@ class Signup extends Component<any, any> {
     });
   };
 
+  // Marks one signup field as touched after it loses focus.
   inputBlurHandler = input => {
     this.setState(prevState => {
       return {
@@ -71,6 +73,7 @@ class Signup extends Component<any, any> {
     });
   };
 
+  // Renders the signup form and delegates submit handling to App.
   render() {
     return (
       <Auth>

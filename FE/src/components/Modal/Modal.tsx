@@ -5,6 +5,7 @@ import ReactDOM from 'react-dom';
 import Button from '../Button/Button';
 import './Modal.css';
 
+// Renders modal content and actions into the dedicated modal portal root.
 const modal = props =>
   ReactDOM.createPortal(
     <div className="modal">

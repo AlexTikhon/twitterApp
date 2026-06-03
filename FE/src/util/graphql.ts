@@ -9,6 +9,7 @@ type GraphqlRequestOptions = {
   token?: string | null;
 };
 
+// Creates an Apollo client for one request with optional bearer auth headers.
 const createClient = (token?: string | null) => {
   const headers: Record<string, string> = {};
   if (token) {
@@ -32,6 +33,7 @@ const createClient = (token?: string | null) => {
   });
 };
 
+// Executes a GraphQL query or mutation and rethrows errors in the app format.
 export const graphqlRequest = async <TData = any>({
   query,
   variables = {},

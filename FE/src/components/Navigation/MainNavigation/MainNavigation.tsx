@@ -8,6 +8,7 @@ import NavigationItems from '../NavigationItems/NavigationItems';
 
 import './MainNavigation.css';
 
+// Renders the desktop nav bar and exposes the mobile menu toggle.
 const mainNavigation = props => (
   <nav className="main-nav">
     <MobileToggle onOpen={props.onOpenMobileNav} />

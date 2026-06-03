@@ -3,6 +3,7 @@ import React, { Fragment } from 'react';
 
 import './Layout.css';
 
+// Places the app header, mobile navigation, and page content into the shell.
 const layout = props => (
   <Fragment>
     <header className="main-header">{props.header}</header>

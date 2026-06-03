@@ -3,6 +3,7 @@ import React from 'react';
 
 import './Toolbar.css';
 
+// Wraps toolbar children in the navigation alignment container.
 const toolbar = props => (
     <div className="toolbar">
        {props.children}

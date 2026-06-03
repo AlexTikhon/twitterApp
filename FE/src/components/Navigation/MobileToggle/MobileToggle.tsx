@@ -3,6 +3,7 @@ import React from 'react';
 
 import './MobileToggle.css';
 
+// Renders the hamburger control that opens the mobile navigation.
 const mobileToggle = props => (
   <button className="mobile-toggle" onClick={props.onOpen}>
     <span className="mobile-toggle__bar" />

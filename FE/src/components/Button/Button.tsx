@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 
 import './Button.css';
 
+// Renders a styled button or router link depending on the link prop.
 const button = props =>
   !props.link ? (
     <button

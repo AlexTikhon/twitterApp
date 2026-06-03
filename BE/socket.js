@@ -3,10 +3,11 @@ const socketIo = require('socket.io');
 
 let io;
 
-exports.init = server => {
+// Creates and stores the shared Socket.IO server instance.
+exports.init = (server, allowedOrigins) => {
   io = socketIo(server, {
     cors: {
-      origin: 'http://localhost:3000',
+      origin: allowedOrigins,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
     }
   });
@@ -14,6 +15,7 @@ exports.init = server => {
   return io;
 };
 
+// Returns the initialized Socket.IO instance for resolver broadcasts.
 exports.getIo = () => {
   if (!io) {
     throw new Error('Socket.io is not initialized.');

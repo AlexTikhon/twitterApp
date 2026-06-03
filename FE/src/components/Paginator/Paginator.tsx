@@ -3,6 +3,7 @@ import React from 'react';
 
 import './Paginator.css';
 
+// Wraps page content and shows previous/next controls when available.
 const paginator = props => (
   <div className="paginator">
     {props.children}

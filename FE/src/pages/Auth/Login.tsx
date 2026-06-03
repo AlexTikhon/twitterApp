@@ -25,6 +25,7 @@ class Login extends Component<any, any> {
     }
   };
 
+  // Updates one login field and recalculates the form validity.
   inputChangeHandler = (input, value) => {
     this.setState(prevState => {
       let isValid = true;
@@ -51,6 +52,7 @@ class Login extends Component<any, any> {
     });
   };
 
+  // Marks one login field as touched after it loses focus.
   inputBlurHandler = input => {
     this.setState(prevState => {
       return {
@@ -65,6 +67,7 @@ class Login extends Component<any, any> {
     });
   };
 
+  // Renders the login form and delegates submit handling to App.
   render() {
     return (
       <Auth>

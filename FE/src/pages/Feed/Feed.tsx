@@ -28,6 +28,7 @@ class Feed extends Component<any, any> {
     error: null
   };
 
+  // Connects realtime post events and loads the initial feed data.
   componentDidMount() {
     this.socket = openSocket(API_URL);
     // Socket events keep the visible page in sync after create, update, and delete actions.
@@ -46,12 +47,14 @@ class Feed extends Component<any, any> {
     this.loadInitialData();
   }
 
+  // Disconnects the socket subscription when the feed page unmounts.
   componentWillUnmount() {
     if (this.socket) {
       this.socket.disconnect();
     }
   }
 
+  // Loads status first, then loads the initial posts page.
   loadInitialData = async () => {
     try {
       const data = await graphqlRequest({
@@ -73,6 +76,7 @@ class Feed extends Component<any, any> {
     }
   };
 
+  // Loads the current, next, or previous page of posts from GraphQL.
   loadPosts = async (direction?: string) => {
     try {
       if (direction) {
@@ -125,6 +129,7 @@ class Feed extends Component<any, any> {
     }
   };
 
+  // Persists the edited profile status for the current user.
   statusUpdateHandler = async event => {
     event.preventDefault();
     try {
@@ -148,10 +153,12 @@ class Feed extends Component<any, any> {
     }
   };
 
+  // Opens the post editor in create mode.
   newPostHandler = () => {
     this.setState({ isEditing: true });
   };
 
+  // Inserts a socket-created post into the visible list when appropriate.
   addPost = post => {
     this.setState(prevState => {
       const postAlreadyExists = prevState.posts.some(
@@ -176,6 +183,7 @@ class Feed extends Component<any, any> {
     });
   };
 
+  // Replaces a visible post after an edit event or edit mutation succeeds.
   updatePost = post => {
     this.setState(prevState => {
       const postIndex = prevState.posts.findIndex(
@@ -195,6 +203,7 @@ class Feed extends Component<any, any> {
     });
   };
 
+  // Removes a post from local state and adjusts the total count.
   removePost = postId => {
     this.setState(prevState => {
       const postExists = prevState.posts.some(post => post._id === postId);
@@ -214,6 +223,7 @@ class Feed extends Component<any, any> {
     });
   };
 
+  // Opens the post editor with the selected post prefilled.
   startEditPostHandler = postId => {
     this.setState(prevState => {
       const loadedPost = { ...prevState.posts.find(p => p._id === postId) };
@@ -225,13 +235,16 @@ class Feed extends Component<any, any> {
     });
   };
 
+  // Closes the post editor without saving changes.
   cancelEditHandler = () => {
     this.setState({ isEditing: false, editPost: null });
   };
 
+  // Detects newly selected images that have already been converted to data URLs.
   isBase64Image = image =>
     typeof image === 'string' && image.startsWith('data:image/');
 
+  // Creates or updates a post using the current editor payload.
   finishEditHandler = async postData => {
     const wasEditing = !!this.state.editPost;
 
@@ -327,10 +340,12 @@ class Feed extends Component<any, any> {
     }
   };
 
+  // Mirrors the status input value into component state.
   statusInputChangeHandler = (input, value) => {
     this.setState({ [input]: value });
   };
 
+  // Deletes a post through GraphQL and removes it from local state.
   deletePostHandler = async postId => {
     this.setState({ postsLoading: true });
     try {
@@ -352,14 +367,17 @@ class Feed extends Component<any, any> {
     }
   };
 
+  // Clears the feed-level error modal state.
   errorHandler = () => {
     this.setState({ error: null });
   };
 
+  // Stores a caught request error so the shared error modal can show it.
   catchError = error => {
     this.setState({ error: error });
   };
 
+  // Renders the status form, editor modal, loading state, and paginated posts.
   render() {
     return (
       <Fragment>

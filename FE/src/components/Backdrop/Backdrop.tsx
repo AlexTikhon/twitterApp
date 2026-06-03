@@ -4,6 +4,7 @@ import ReactDOM from 'react-dom';
 
 import './Backdrop.css';
 
+// Renders a clickable overlay into the dedicated backdrop portal root.
 const backdrop = props =>
   ReactDOM.createPortal(
     <div

@@ -37,6 +37,7 @@ class FeedEdit extends Component<any, any> {
 		imagePreview: null
 	};
 
+	// Resets or preloads the form whenever the editor modal opens.
 	componentDidUpdate(prevProps, prevState) {
 		// Opening the modal for a new post resets the form to its empty state.
 		if (this.props.editing && prevProps.editing !== this.props.editing && !this.props.selectedPost) {
@@ -79,6 +80,7 @@ class FeedEdit extends Component<any, any> {
 		}
 	}
 
+	// Updates field state and converts selected image files to base64 previews.
 	postInputChangeHandler = async (input, value, files) => {
 		let updatedValue = value;
 
@@ -118,6 +120,7 @@ class FeedEdit extends Component<any, any> {
 		});
 	};
 
+	// Marks a field as touched so validation styling can appear.
 	inputBlurHandler = input => {
 		this.setState(prevState => {
 			return {
@@ -132,6 +135,7 @@ class FeedEdit extends Component<any, any> {
 		});
 	};
 
+	// Resets editor state and informs the parent that editing was cancelled.
 	cancelPostChangeHandler = () => {
 		this.setState({
 			postForm: POST_FORM,
@@ -141,6 +145,7 @@ class FeedEdit extends Component<any, any> {
 		this.props.onCancelEdit();
 	};
 
+	// Emits the current post form payload and resets the modal state.
 	acceptPostChangeHandler = () => {
 		const post = {
 			title: this.state.postForm.title.value,
@@ -155,6 +160,7 @@ class FeedEdit extends Component<any, any> {
 		});
 	};
 
+	// Renders the modal editor only while the parent marks it as open.
 	render() {
 		return this.props.editing ? (
 			<Fragment>

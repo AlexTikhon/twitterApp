@@ -8,6 +8,7 @@ const MIME_TYPE_TO_EXTENSION = {
   'image/jpeg': 'jpg'
 };
 
+// Validates a data URL, writes it to disk, and returns the public image path.
 const saveImageFromBase64 = async imageData => {
   if (!imageData || typeof imageData !== 'string') {
     return '';

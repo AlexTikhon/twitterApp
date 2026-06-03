@@ -4,6 +4,7 @@ import React from 'react';
 import Button from '../../Button/Button';
 import './Post.css';
 
+// Renders one feed post summary with view, edit, and delete actions.
 const post = props => (
   <article className="post">
     <header className="post__header">

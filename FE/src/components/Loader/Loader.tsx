@@ -3,6 +3,7 @@ import React from 'react';
 
 import './Loader.css';
 
+// Renders the four-part loading spinner.
 const loader = () => (
   <div className="loader">
     <div />
