@@ -1,11 +1,12 @@
 // Loads a single post view from GraphQL using the route post id.
 import React, { Component } from 'react';
+import { useParams } from 'react-router-dom';
 
 import Image from '../../../components/Image/Image';
 import { graphqlRequest } from '../../../util/graphql';
 import './SinglePost.css';
 
-class SinglePost extends Component {
+class SinglePost extends Component<any, any> {
   state = {
     title: '',
     author: '',
@@ -19,7 +20,7 @@ class SinglePost extends Component {
   }
 
   loadPost = async () => {
-    const postId = this.props.match.params.postId;
+    const postId = this.props.postId;
     try {
       const data = await graphqlRequest({
         query: `
@@ -68,4 +69,10 @@ class SinglePost extends Component {
   }
 }
 
-export default SinglePost;
+const SinglePostWithParams = props => {
+  const { postId } = useParams();
+
+  return <SinglePost {...props} postId={postId} />;
+};
+
+export default SinglePostWithParams;

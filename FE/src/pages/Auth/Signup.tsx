@@ -1,4 +1,4 @@
-// Handles the login form state and delegates the actual request to App.
+// Handles the signup form state before App sends the GraphQL mutation.
 import React, { Component } from 'react';
 
 import Input from '../../components/Form/Input/Input';
@@ -6,9 +6,9 @@ import Button from '../../components/Button/Button';
 import { required, length, email } from '../../util/validators';
 import Auth from './Auth';
 
-class Login extends Component {
+class Signup extends Component<any, any> {
   state = {
-    loginForm: {
+    signupForm: {
       email: {
         value: '',
         valid: false,
@@ -21,6 +21,12 @@ class Login extends Component {
         touched: false,
         validators: [required, length({ min: 5 })]
       },
+      name: {
+        value: '',
+        valid: false,
+        touched: false,
+        validators: [required]
+      },
       formIsValid: false
     }
   };
@@ -28,13 +34,13 @@ class Login extends Component {
   inputChangeHandler = (input, value) => {
     this.setState(prevState => {
       let isValid = true;
-      for (const validator of prevState.loginForm[input].validators) {
+      for (const validator of prevState.signupForm[input].validators) {
         isValid = isValid && validator(value);
       }
       const updatedForm = {
-        ...prevState.loginForm,
+        ...prevState.signupForm,
         [input]: {
-          ...prevState.loginForm[input],
+          ...prevState.signupForm[input],
           valid: isValid,
           value: value
         }
@@ -45,7 +51,7 @@ class Login extends Component {
         formIsValid = formIsValid && updatedForm[inputName].valid;
       }
       return {
-        loginForm: updatedForm,
+        signupForm: updatedForm,
         formIsValid: formIsValid
       };
     });
@@ -54,10 +60,10 @@ class Login extends Component {
   inputBlurHandler = input => {
     this.setState(prevState => {
       return {
-        loginForm: {
-          ...prevState.loginForm,
+        signupForm: {
+          ...prevState.signupForm,
           [input]: {
-            ...prevState.loginForm[input],
+            ...prevState.signupForm[input],
             touched: true
           }
         }
@@ -70,9 +76,10 @@ class Login extends Component {
       <Auth>
         <form
           onSubmit={e =>
-            this.props.onLogin(e, {
-              email: this.state.loginForm.email.value,
-              password: this.state.loginForm.password.value
+            this.props.onSignup(e, {
+              email: this.state.signupForm.email.value,
+              name: this.state.signupForm.name.value,
+              password: this.state.signupForm.password.value
             })
           }
         >
@@ -83,9 +90,20 @@ class Login extends Component {
             control="input"
             onChange={this.inputChangeHandler}
             onBlur={this.inputBlurHandler.bind(this, 'email')}
-            value={this.state.loginForm['email'].value}
-            valid={this.state.loginForm['email'].valid}
-            touched={this.state.loginForm['email'].touched}
+            value={this.state.signupForm['email'].value}
+            valid={this.state.signupForm['email'].valid}
+            touched={this.state.signupForm['email'].touched}
+          />
+          <Input
+            id="name"
+            label="Your Name"
+            type="text"
+            control="input"
+            onChange={this.inputChangeHandler}
+            onBlur={this.inputBlurHandler.bind(this, 'name')}
+            value={this.state.signupForm['name'].value}
+            valid={this.state.signupForm['name'].valid}
+            touched={this.state.signupForm['name'].touched}
           />
           <Input
             id="password"
@@ -94,12 +112,12 @@ class Login extends Component {
             control="input"
             onChange={this.inputChangeHandler}
             onBlur={this.inputBlurHandler.bind(this, 'password')}
-            value={this.state.loginForm['password'].value}
-            valid={this.state.loginForm['password'].valid}
-            touched={this.state.loginForm['password'].touched}
+            value={this.state.signupForm['password'].value}
+            valid={this.state.signupForm['password'].valid}
+            touched={this.state.signupForm['password'].touched}
           />
           <Button design="raised" type="submit" loading={this.props.loading}>
-            Login
+            Signup
           </Button>
         </form>
       </Auth>
@@ -107,4 +125,4 @@ class Login extends Component {
   }
 }
 
-export default Login;
+export default Signup;

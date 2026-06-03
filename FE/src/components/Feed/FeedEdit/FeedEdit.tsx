@@ -30,7 +30,7 @@ const POST_FORM = {
 	}
 };
 
-class FeedEdit extends Component {
+class FeedEdit extends Component<any, any> {
 	state = {
 		postForm: POST_FORM,
 		formIsValid: false,

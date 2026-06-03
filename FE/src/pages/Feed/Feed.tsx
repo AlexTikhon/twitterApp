@@ -13,8 +13,10 @@ import { API_URL } from '../../config';
 import { graphqlRequest } from '../../util/graphql';
 import './Feed.css';
 
-class Feed extends Component {
-  state = {
+class Feed extends Component<any, any> {
+  socket: any = null;
+
+  state: any = {
     isEditing: false,
     posts: [],
     totalPosts: 0,
@@ -22,7 +24,8 @@ class Feed extends Component {
     status: '',
     postPage: 1,
     postsLoading: true,
-    editLoading: false
+    editLoading: false,
+    error: null
   };
 
   componentDidMount() {
@@ -70,7 +73,7 @@ class Feed extends Component {
     }
   };
 
-  loadPosts = async direction => {
+  loadPosts = async (direction?: string) => {
     try {
       if (direction) {
         this.setState({ postsLoading: true, posts: [] });

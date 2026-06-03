@@ -1,6 +1,6 @@
 // Coordinates authentication state and switches between auth routes and feed routes.
 import React, { Component, Fragment } from 'react';
-import { Route, Switch, Redirect, withRouter } from 'react-router-dom';
+import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 
 import Layout from './components/Layout/Layout';
 import Backdrop from './components/Backdrop/Backdrop';
@@ -15,7 +15,7 @@ import SignupPage from './pages/Auth/Signup';
 import { graphqlRequest } from './util/graphql';
 import './App.css';
 
-class App extends Component {
+class App extends Component<any, any> {
 	state = {
 		showBackdrop: false,
 		showMobileNav: false,
@@ -116,7 +116,7 @@ class App extends Component {
 				variables: authData
 			});
 			this.setState({ isAuth: false, authLoading: false });
-			this.props.history.replace('/');
+			this.props.navigate('/');
 		} catch (err) {
 			console.log(err);
 			this.setState({
@@ -140,53 +140,49 @@ class App extends Component {
 
 	render() {
 		let routes = (
-			<Switch>
+			<Routes>
 				<Route
 					path="/"
-					exact
-					render={() => (
+					element={
 						<LoginPage
 							onLogin={this.loginHandler}
 							loading={this.state.authLoading}
 						/>
-					)}
+					}
 				/>
 				<Route
 					path="/signup"
-					exact
-					render={() => (
+					element={
 						<SignupPage
 							onSignup={this.signupHandler}
 							loading={this.state.authLoading}
 						/>
-					)}
+					}
 				/>
-				<Redirect to="/" />
-			</Switch>
+				<Route path="*" element={<Navigate to="/" replace />} />
+			</Routes>
 		);
 		if (this.state.isAuth) {
 			// Authenticated users can access the feed and individual post pages.
 			routes = (
-				<Switch>
+				<Routes>
 					<Route
 						path="/"
-						exact
-						render={() => (
+						element={
 							<FeedPage userId={this.state.userId} token={this.state.token} />
-						)}
+						}
 					/>
 					<Route
 						path="/:postId"
-						render={props => (
+						element={
 							<SinglePostPage
-								{...props}
 								userId={this.state.userId}
 								token={this.state.token}
 							/>
-						)}
+						}
 					/>
-					<Redirect to="/" />
-				</Switch>
+					<Route path="*" element={<Navigate to="/" replace />} />
+				</Routes>
 			);
 		}
 		return (
@@ -221,4 +217,10 @@ class App extends Component {
 	}
 }
 
-export default withRouter(App);
+const AppWithRouter = () => {
+	const navigate = useNavigate();
+
+	return <App navigate={navigate} />;
+};
+
+export default AppWithRouter;
