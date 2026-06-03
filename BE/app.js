@@ -99,6 +99,7 @@ if (!mongoDbUri) {
 const startServer = async () => {
   try {
     await mongoose.connect(mongoDbUri);
+		console.log('MongoDB connected successfully');
 
     const apolloServer = new ApolloServer({
       typeDefs,
