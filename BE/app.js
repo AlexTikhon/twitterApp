@@ -9,6 +9,7 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const helmet = require('helmet');
 const morgan = require('morgan');
+const { rateLimit } = require('express-rate-limit');
 const { ApolloServer } = require('@apollo/server');
 const { expressMiddleware } = require('@as-integrations/express4');
 
@@ -27,6 +28,26 @@ const jsonBodyLimit = process.env.JSON_BODY_LIMIT || '8mb';
 const isProduction = process.env.NODE_ENV === 'production';
 const defaultCorsOrigins = ['http://localhost:3000', 'http://127.0.0.1:3000'];
 
+// Reads a positive integer env value while falling back to a safe default.
+const getPositiveIntegerEnv = (name, fallback) => {
+  const value = Number(process.env[name]);
+
+  return Number.isInteger(value) && value > 0 ? value : fallback;
+};
+
+const rateLimitWindowMs = getPositiveIntegerEnv(
+  'RATE_LIMIT_WINDOW_MS',
+  15 * 60 * 1000
+);
+const apiRateLimitMax = getPositiveIntegerEnv(
+  'RATE_LIMIT_MAX_REQUESTS',
+  300
+);
+const graphqlRateLimitMax = getPositiveIntegerEnv(
+  'GRAPHQL_RATE_LIMIT_MAX_REQUESTS',
+  120
+);
+
 // Builds the trusted browser origins list from env with local Vite defaults.
 const getAllowedCorsOrigins = () =>
   (process.env.CORS_ORIGINS
@@ -37,6 +58,28 @@ const getAllowedCorsOrigins = () =>
     .filter(Boolean);
 
 const allowedCorsOrigins = getAllowedCorsOrigins();
+
+const createRateLimiter = (max, message) =>
+  rateLimit({
+    windowMs: rateLimitWindowMs,
+    limit: max,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip: req => req.method === 'OPTIONS' || req.path === '/health',
+    message: {
+      message,
+      data: null
+    }
+  });
+
+const apiRateLimiter = createRateLimiter(
+  apiRateLimitMax,
+  'Too many requests. Please try again later.'
+);
+const graphqlRateLimiter = createRateLimiter(
+  graphqlRateLimitMax,
+  'Too many GraphQL requests. Please try again later.'
+);
 
 // Allows same-origin/server-to-server requests and rejects unknown browser origins.
 const corsOptions = {
@@ -56,6 +99,7 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.use(morgan(isProduction ? 'combined' : 'dev'));
+app.use(apiRateLimiter);
 // Helmet and compression are applied before the API handlers so every response
 // gets the security headers and compression settings consistently.
 app.use(
@@ -122,6 +166,7 @@ const startServer = async () => {
     // GraphQL is the single API entrypoint for auth, feed, and profile status.
     app.use(
       '/graphql',
+      graphqlRateLimiter,
       expressMiddleware(apolloServer, {
         // Makes the authenticated Express request available to all resolvers.
         context: async ({ req }) => ({ req })

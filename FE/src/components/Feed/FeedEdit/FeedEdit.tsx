@@ -126,13 +126,14 @@ const FeedEdit = (props: FeedEditProps) => {
 				setImagePreview(b64);
 			} catch (err) {
 				console.log(err);
+				updatedValue = '';
 				setImagePreview(null);
 			}
 		}
 		setPostForm(prevPostForm => {
 			let isValid = true;
 			for (const validator of prevPostForm[input].validators) {
-				isValid = isValid && validator(value);
+				isValid = isValid && validator(updatedValue);
 			}
 			const updatedForm = {
 				...prevPostForm,
