@@ -3,8 +3,18 @@ import React from 'react';
 
 import './Input.css';
 
+type FilePickerProps = {
+  id: string;
+  label: string;
+  control?: 'input';
+  valid?: boolean;
+  touched?: boolean;
+  onChange: (id: string, value: string, files?: FileList | null) => void;
+  onBlur?: React.FocusEventHandler<HTMLInputElement>;
+};
+
 // Renders a file input and forwards selected files to the parent form.
-const filePicker = props => (
+const filePicker = (props: FilePickerProps) => (
   <div className="input">
     <label htmlFor={props.id}>{props.label}</label>
     <input

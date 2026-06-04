@@ -3,8 +3,16 @@ import React from 'react';
 
 import './Paginator.css';
 
+type PaginatorProps = {
+  children: React.ReactNode;
+  currentPage: number;
+  lastPage: number;
+  onPrevious: () => void;
+  onNext: () => void;
+};
+
 // Wraps page content and shows previous/next controls when available.
-const paginator = props => (
+const paginator = (props: PaginatorProps) => (
   <div className="paginator">
     {props.children}
     <div className="paginator__controls">

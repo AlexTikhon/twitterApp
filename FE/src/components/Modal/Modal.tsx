@@ -5,9 +5,24 @@ import ReactDOM from 'react-dom';
 import Button from '../Button/Button';
 import './Modal.css';
 
+type ModalProps = {
+  title: string;
+  children: React.ReactNode;
+  acceptEnabled?: boolean;
+  isLoading?: boolean;
+  onCancelModal: () => void;
+  onAcceptModal: () => void;
+};
+
 // Renders modal content and actions into the dedicated modal portal root.
-const modal = props =>
-  ReactDOM.createPortal(
+const modal = (props: ModalProps) => {
+  const modalRoot = document.getElementById('modal-root');
+
+  if (!modalRoot) {
+    return null;
+  }
+
+  return ReactDOM.createPortal(
     <div className="modal">
       <header className="modal__header">
         <h1>{props.title}</h1>
@@ -27,7 +42,8 @@ const modal = props =>
         </Button>
       </div>
     </div>,
-    document.getElementById('modal-root')
+    modalRoot
   );
+};
 
 export default modal;

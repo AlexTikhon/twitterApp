@@ -4,8 +4,19 @@ import React from 'react';
 import Button from '../../Button/Button';
 import './Post.css';
 
+type PostProps = {
+  id: string;
+  author: string;
+  date: string;
+  title: string;
+  image?: string;
+  content?: string;
+  onStartEdit: () => void;
+  onDelete: () => void;
+};
+
 // Renders one feed post summary with view, edit, and delete actions.
-const post = props => (
+const post = (props: PostProps) => (
   <article className="post">
     <header className="post__header">
       <h3 className="post__meta">

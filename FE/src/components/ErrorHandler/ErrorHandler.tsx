@@ -4,8 +4,13 @@ import React, { Fragment } from 'react';
 import Backdrop from '../Backdrop/Backdrop';
 import Modal from '../Modal/Modal';
 
+type ErrorHandlerProps = {
+  error: Error | null;
+  onHandle: () => void;
+};
+
 // Shows a modal error dialog whenever an error object is present.
-const errorHandler = props => (
+const errorHandler = (props: ErrorHandlerProps) => (
   <Fragment>
     {props.error && <Backdrop onClick={props.onHandle} />}
     {props.error && (

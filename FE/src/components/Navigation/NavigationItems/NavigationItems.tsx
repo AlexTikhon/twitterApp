@@ -10,28 +10,41 @@ const navItems = [
   { id: 'signup', text: 'Signup', link: '/signup', auth: false }
 ];
 
+type NavigationItemsProps = {
+  isAuth: boolean;
+  mobile?: boolean;
+  onChoose?: () => void;
+  onLogout: () => void;
+};
+
 // Filters nav links by auth state and appends the logout action when needed.
-const navigationItems = props => [
-  ...navItems.filter(item => item.auth === props.isAuth).map(item => (
-    <li
-      key={item.id}
-      className={['navigation-item', props.mobile ? 'mobile' : ''].join(' ')}
-    >
-      <NavLink
-        to={item.link}
-        end
-        onClick={props.onChoose}
-        className={({ isActive }) => (isActive ? 'active' : undefined)}
-      >
-        {item.text}
-      </NavLink>
-    </li>
-  )),
-  props.isAuth && (
-    <li className="navigation-item" key="logout">
-      <button onClick={props.onLogout}>Logout</button>
-    </li>
-  )
-];
+const navigationItems = (props: NavigationItemsProps) => (
+  <>
+    {navItems
+      .filter(item => item.auth === props.isAuth)
+      .map(item => (
+        <li
+          key={item.id}
+          className={['navigation-item', props.mobile ? 'mobile' : ''].join(
+            ' '
+          )}
+        >
+          <NavLink
+            to={item.link}
+            end
+            onClick={props.onChoose}
+            className={({ isActive }) => (isActive ? 'active' : undefined)}
+          >
+            {item.text}
+          </NavLink>
+        </li>
+      ))}
+    {props.isAuth && (
+      <li className="navigation-item" key="logout">
+        <button onClick={props.onLogout}>Logout</button>
+      </li>
+    )}
+  </>
+);
 
 export default navigationItems;

@@ -34,7 +34,7 @@ const createClient = (token?: string | null) => {
 };
 
 // Executes a GraphQL query or mutation and rethrows errors in the app format.
-export const graphqlRequest = async <TData = any>({
+export const graphqlRequest = async <TData = unknown>({
   query,
   variables = {},
   token
@@ -55,7 +55,19 @@ export const graphqlRequest = async <TData = any>({
         });
 
     return result.data as TData;
-  } catch (apolloError: any) {
+  } catch (rawError: unknown) {
+    const apolloError = rawError as {
+      graphQLErrors?: Array<{
+        message?: string;
+        data?: unknown;
+        status?: number;
+      }>;
+      message?: string;
+      networkError?: {
+        statusCode?: number;
+        status?: number;
+      };
+    };
     const graphqlError = apolloError.graphQLErrors?.[0];
     const error = new Error(
       graphqlError?.message || apolloError.message || 'GraphQL request failed.'

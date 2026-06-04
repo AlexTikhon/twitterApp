@@ -1,10 +1,11 @@
 // Owns the timeline UI, GraphQL feed operations, and realtime socket updates.
-import React, { Component, Fragment } from 'react';
-import openSocket from 'socket.io-client';
+import React, { Fragment, useEffect, useRef, useState } from 'react';
+import openSocket, { Socket } from 'socket.io-client';
 
 import Post from '../../components/Feed/Post/Post';
 import Button from '../../components/Button/Button';
 import FeedEdit from '../../components/Feed/FeedEdit/FeedEdit';
+import type { PostEditorData } from '../../components/Feed/FeedEdit/FeedEdit';
 import Input from '../../components/Form/Input/Input';
 import Paginator from '../../components/Paginator/Paginator';
 import Loader from '../../components/Loader/Loader';
@@ -13,10 +14,77 @@ import { API_URL } from '../../config';
 import { graphqlRequest } from '../../util/graphql';
 import './Feed.css';
 
-class Feed extends Component<any, any> {
-  socket: any = null;
+type FeedProps = {
+  token: string | null;
+  userId?: string | null;
+};
 
-  state: any = {
+type PostCreator = {
+  _id: string;
+  name: string;
+};
+
+type FeedPost = {
+  _id: string;
+  title: string;
+  content: string;
+  imageUrl: string;
+  createdAt: string;
+  creator: PostCreator;
+};
+
+type FeedState = {
+  isEditing: boolean;
+  posts: FeedPost[];
+  totalPosts: number;
+  editPost: FeedPost | null;
+  status: string;
+  postPage: number;
+  postsLoading: boolean;
+  editLoading: boolean;
+  error: Error | null;
+};
+
+type LoadDirection = 'next' | 'previous';
+
+type StatusResponse = {
+  status: {
+    status: string;
+  };
+};
+
+type PostsResponse = {
+  posts: {
+    totalItems: number;
+    posts: FeedPost[];
+  };
+};
+
+type UpdateStatusResponse = {
+  updateStatus: {
+    status: string;
+  };
+};
+
+type CreatePostResponse = {
+  createPost: FeedPost;
+};
+
+type UpdatePostResponse = {
+  updatePost: FeedPost;
+};
+
+type PostsSocketEvent =
+  | { action: 'create'; post: FeedPost }
+  | { action: 'update'; post: FeedPost }
+  | { action: 'delete'; post: Pick<FeedPost, '_id'> };
+
+const normalizeError = (error: unknown, fallbackMessage: string): Error =>
+  error instanceof Error ? error : new Error(fallbackMessage);
+
+const Feed = (props: FeedProps) => {
+  const socket = useRef<Socket | null>(null);
+  const [feedState, setFeedState] = useState<FeedState>({
     isEditing: false,
     posts: [],
     totalPosts: 0,
@@ -26,38 +94,12 @@ class Feed extends Component<any, any> {
     postsLoading: true,
     editLoading: false,
     error: null
-  };
-
-  // Connects realtime post events and loads the initial feed data.
-  componentDidMount() {
-    this.socket = openSocket(API_URL);
-    // Socket events keep the visible page in sync after create, update, and delete actions.
-    this.socket.on('posts', data => {
-      if (data.action === 'create') {
-        this.addPost(data.post);
-      }
-      if (data.action === 'update') {
-        this.updatePost(data.post);
-      }
-      if (data.action === 'delete') {
-        this.removePost(data.post._id);
-      }
-    });
-
-    this.loadInitialData();
-  }
-
-  // Disconnects the socket subscription when the feed page unmounts.
-  componentWillUnmount() {
-    if (this.socket) {
-      this.socket.disconnect();
-    }
-  }
+  });
 
   // Loads status first, then loads the initial posts page.
-  loadInitialData = async () => {
+  const loadInitialData = async () => {
     try {
-      const data = await graphqlRequest({
+      const data = await graphqlRequest<StatusResponse>({
         query: `
           query GetStatus {
             status {
@@ -65,35 +107,38 @@ class Feed extends Component<any, any> {
             }
           }
         `,
-        token: this.props.token
+        token: props.token
       });
 
-      this.setState({ status: data.status.status });
+      setFeedState(prevState => ({ ...prevState, status: data.status.status }));
       // The status query and first posts query are separated to keep the UI responsive.
-      await this.loadPosts();
+      await loadPosts();
     } catch (error) {
-      this.catchError(error);
+      catchError(error);
     }
   };
 
   // Loads the current, next, or previous page of posts from GraphQL.
-  loadPosts = async (direction?: string) => {
+  const loadPosts = async (direction?: LoadDirection) => {
     try {
+      let page = feedState.postPage;
       if (direction) {
-        this.setState({ postsLoading: true, posts: [] });
-      }
-      let page = this.state.postPage;
-      // Pagination is driven locally and then mirrored in the GraphQL query variables.
-      if (direction === 'next') {
-        page++;
-        this.setState({ postPage: page });
-      }
-      if (direction === 'previous') {
-        page--;
-        this.setState({ postPage: page });
+        // Pagination is driven locally and then mirrored in the GraphQL query variables.
+        if (direction === 'next') {
+          page++;
+        }
+        if (direction === 'previous') {
+          page--;
+        }
+        setFeedState(prevState => ({
+          ...prevState,
+          postsLoading: true,
+          posts: [],
+          postPage: page
+        }));
       }
 
-      const data = await graphqlRequest({
+      const data = await graphqlRequest<PostsResponse>({
         query: `
           query GetPosts($page: Int!, $limit: Int!) {
             posts(page: $page, limit: $limit) {
@@ -116,24 +161,27 @@ class Feed extends Component<any, any> {
           page,
           limit: 2
         },
-        token: this.props.token
+        token: props.token
       });
 
-      this.setState({
+      setFeedState(prevState => ({
+        ...prevState,
         posts: data.posts.posts,
         totalPosts: data.posts.totalItems,
         postsLoading: false
-      });
+      }));
     } catch (error) {
-      this.catchError(error);
+      catchError(error);
     }
   };
 
   // Persists the edited profile status for the current user.
-  statusUpdateHandler = async event => {
+  const statusUpdateHandler = async (
+    event: React.FormEvent<HTMLFormElement>
+  ) => {
     event.preventDefault();
     try {
-      const data = await graphqlRequest({
+      const data = await graphqlRequest<UpdateStatusResponse>({
         query: `
           mutation UpdateStatus($status: String!) {
             updateStatus(status: $status) {
@@ -142,41 +190,45 @@ class Feed extends Component<any, any> {
           }
         `,
         variables: {
-          status: this.state.status
+          status: feedState.status
         },
-        token: this.props.token
+        token: props.token
       });
 
-      this.setState({ status: data.updateStatus.status });
+      setFeedState(prevState => ({
+        ...prevState,
+        status: data.updateStatus.status
+      }));
     } catch (error) {
-      this.catchError(error);
+      catchError(error);
     }
   };
 
   // Opens the post editor in create mode.
-  newPostHandler = () => {
-    this.setState({ isEditing: true });
+  const newPostHandler = () => {
+    setFeedState(prevState => ({ ...prevState, isEditing: true }));
   };
 
   // Inserts a socket-created post into the visible list when appropriate.
-  addPost = post => {
-    this.setState(prevState => {
+  const addPost = (post: FeedPost) => {
+    setFeedState(prevState => {
       const postAlreadyExists = prevState.posts.some(
         existingPost => existingPost._id === post._id
       );
 
       if (postAlreadyExists) {
-        return null;
+        return prevState;
       }
 
       const totalPosts = prevState.totalPosts + 1;
 
       // Only the first page inserts the new item immediately into the visible list.
       if (prevState.postPage !== 1) {
-        return { totalPosts };
+        return { ...prevState, totalPosts };
       }
 
       return {
+        ...prevState,
         posts: [post, ...prevState.posts].slice(0, 2),
         totalPosts
       };
@@ -184,38 +236,41 @@ class Feed extends Component<any, any> {
   };
 
   // Replaces a visible post after an edit event or edit mutation succeeds.
-  updatePost = post => {
-    this.setState(prevState => {
+  const updatePost = (post: FeedPost) => {
+    setFeedState(prevState => {
       const postIndex = prevState.posts.findIndex(
         existingPost => existingPost._id === post._id
       );
 
       if (postIndex < 0) {
-        return null;
+        return prevState;
       }
 
       const updatedPosts = [...prevState.posts];
       updatedPosts[postIndex] = post;
 
       return {
+        ...prevState,
         posts: updatedPosts
       };
     });
   };
 
   // Removes a post from local state and adjusts the total count.
-  removePost = postId => {
-    this.setState(prevState => {
+  const removePost = (postId: string) => {
+    setFeedState(prevState => {
       const postExists = prevState.posts.some(post => post._id === postId);
       const totalPosts = Math.max(prevState.totalPosts - 1, 0);
 
       if (!postExists) {
         return {
+          ...prevState,
           totalPosts
         };
       }
 
       return {
+        ...prevState,
         posts: prevState.posts.filter(post => post._id !== postId),
         totalPosts,
         postsLoading: false
@@ -224,11 +279,12 @@ class Feed extends Component<any, any> {
   };
 
   // Opens the post editor with the selected post prefilled.
-  startEditPostHandler = postId => {
-    this.setState(prevState => {
-      const loadedPost = { ...prevState.posts.find(p => p._id === postId) };
+  const startEditPostHandler = (postId: string) => {
+    setFeedState(prevState => {
+      const loadedPost = prevState.posts.find(p => p._id === postId) || null;
 
       return {
+        ...prevState,
         isEditing: true,
         editPost: loadedPost
       };
@@ -236,36 +292,42 @@ class Feed extends Component<any, any> {
   };
 
   // Closes the post editor without saving changes.
-  cancelEditHandler = () => {
-    this.setState({ isEditing: false, editPost: null });
+  const cancelEditHandler = () => {
+    setFeedState(prevState => ({
+      ...prevState,
+      isEditing: false,
+      editPost: null
+    }));
   };
 
   // Detects newly selected images that have already been converted to data URLs.
-  isBase64Image = image =>
+  const isBase64Image = (image: string) =>
     typeof image === 'string' && image.startsWith('data:image/');
 
   // Creates or updates a post using the current editor payload.
-  finishEditHandler = async postData => {
-    const wasEditing = !!this.state.editPost;
+  const finishEditHandler = async (postData: PostEditorData) => {
+    const activeEditPost = feedState.editPost;
+    const wasEditing = !!activeEditPost;
 
-    this.setState({
+    setFeedState(prevState => ({
+      ...prevState,
       editLoading: true
-    });
+    }));
 
     const postInput = {
       title: postData.title,
       content: postData.content,
       // New files arrive as base64 strings; existing posts reuse their old image path.
-      image: this.isBase64Image(postData.image) ? postData.image : null,
+      image: isBase64Image(postData.image) ? postData.image : null,
       oldImagePath:
-        this.state.editPost && !this.isBase64Image(postData.image)
-          ? this.state.editPost.imageUrl
+        activeEditPost && !isBase64Image(postData.image)
+          ? activeEditPost.imageUrl
           : null
     };
 
     try {
-      const data = await graphqlRequest({
-        query: this.state.editPost
+      const data = await graphqlRequest<CreatePostResponse | UpdatePostResponse>({
+        query: activeEditPost
           ? `
               mutation UpdatePost($id: ID!, $postInput: PostInputData!) {
                 updatePost(id: $id, postInput: $postInput) {
@@ -296,27 +358,32 @@ class Feed extends Component<any, any> {
                 }
               }
             `,
-        variables: this.state.editPost
+        variables: activeEditPost
           ? {
-              id: this.state.editPost._id,
+              id: activeEditPost._id,
               postInput
             }
           : {
               postInput
             },
-        token: this.props.token
+        token: props.token
       });
-      const post = this.state.editPost ? data.updatePost : data.createPost;
+      const post = activeEditPost
+        ? (data as UpdatePostResponse).updatePost
+        : (data as CreatePostResponse).createPost;
 
-      this.setState(prevState => {
+      setFeedState(prevState => {
         let updatedPosts = [...prevState.posts];
-        if (prevState.editPost) {
+        if (activeEditPost) {
           const postIndex = prevState.posts.findIndex(
-            p => p._id === prevState.editPost._id
+            p => p._id === activeEditPost._id
           );
-          updatedPosts[postIndex] = post;
+          if (postIndex >= 0) {
+            updatedPosts[postIndex] = post;
+          }
         }
         return {
+          ...prevState,
           posts: updatedPosts,
           isEditing: false,
           editPost: null,
@@ -325,29 +392,33 @@ class Feed extends Component<any, any> {
       });
 
       if (!wasEditing) {
-        this.addPost(post);
+        addPost(post);
       } else {
-        this.updatePost(post);
+        updatePost(post);
       }
     } catch (err) {
       console.log(err);
-      this.setState({
+      setFeedState(prevState => ({
+        ...prevState,
         isEditing: false,
         editPost: null,
         editLoading: false,
-        error: err
-      });
+        error: normalizeError(err, 'Could not save post.')
+      }));
     }
   };
 
   // Mirrors the status input value into component state.
-  statusInputChangeHandler = (input, value) => {
-    this.setState({ [input]: value });
+  const statusInputChangeHandler = (input: string, value: string) => {
+    if (input !== 'status') {
+      return;
+    }
+    setFeedState(prevState => ({ ...prevState, [input]: value }));
   };
 
   // Deletes a post through GraphQL and removes it from local state.
-  deletePostHandler = async postId => {
-    this.setState({ postsLoading: true });
+  const deletePostHandler = async (postId: string) => {
+    setFeedState(prevState => ({ ...prevState, postsLoading: true }));
     try {
       await graphqlRequest({
         query: `
@@ -358,92 +429,119 @@ class Feed extends Component<any, any> {
         variables: {
           id: postId
         },
-        token: this.props.token
+        token: props.token
       });
-      this.removePost(postId);
+      removePost(postId);
     } catch (err) {
       console.log(err);
-      this.setState({ postsLoading: false });
+      setFeedState(prevState => ({ ...prevState, postsLoading: false }));
     }
   };
 
   // Clears the feed-level error modal state.
-  errorHandler = () => {
-    this.setState({ error: null });
+  const errorHandler = () => {
+    setFeedState(prevState => ({ ...prevState, error: null }));
   };
 
   // Stores a caught request error so the shared error modal can show it.
-  catchError = error => {
-    this.setState({ error: error });
+  const catchError = (error: unknown) => {
+    setFeedState(prevState => ({
+      ...prevState,
+      error: normalizeError(error, 'Feed request failed.')
+    }));
   };
 
+  // Connects realtime post events and loads the initial feed data.
+  useEffect(() => {
+    socket.current = openSocket(API_URL);
+    // Socket events keep the visible page in sync after create, update, and delete actions.
+    socket.current.on('posts', (data: PostsSocketEvent) => {
+      if (data.action === 'create') {
+        addPost(data.post);
+      }
+      if (data.action === 'update') {
+        updatePost(data.post);
+      }
+      if (data.action === 'delete') {
+        removePost(data.post._id);
+      }
+    });
+
+    loadInitialData();
+
+    // Disconnects the socket subscription when the feed page unmounts.
+    return () => {
+      if (socket.current) {
+        socket.current.disconnect();
+      }
+    };
+  }, []);
+
   // Renders the status form, editor modal, loading state, and paginated posts.
-  render() {
-    return (
-      <Fragment>
-        <ErrorHandler error={this.state.error} onHandle={this.errorHandler} />
-        <FeedEdit
-          editing={this.state.isEditing}
-          selectedPost={this.state.editPost}
-          loading={this.state.editLoading}
-          onCancelEdit={this.cancelEditHandler}
-          onFinishEdit={this.finishEditHandler}
-        />
-        <section className="feed__status">
-          <form onSubmit={this.statusUpdateHandler}>
-            <Input
-              id="status"
-              type="text"
-              placeholder="Your status"
-              control="input"
-              onChange={this.statusInputChangeHandler}
-              value={this.state.status}
-            />
-            <Button mode="flat" type="submit">
-              Update
-            </Button>
-          </form>
-        </section>
-        <section className="feed__control">
-          <Button mode="raised" design="accent" onClick={this.newPostHandler}>
-            New Post
+  return (
+    <Fragment>
+      <ErrorHandler error={feedState.error} onHandle={errorHandler} />
+      <FeedEdit
+        editing={feedState.isEditing}
+        selectedPost={feedState.editPost}
+        loading={feedState.editLoading}
+        onCancelEdit={cancelEditHandler}
+        onFinishEdit={finishEditHandler}
+      />
+      <section className="feed__status">
+        <form onSubmit={statusUpdateHandler}>
+          <Input
+            id="status"
+            type="text"
+            placeholder="Your status"
+            control="input"
+            onChange={statusInputChangeHandler}
+            value={feedState.status}
+          />
+          <Button mode="flat" type="submit">
+            Update
           </Button>
-        </section>
-        <section className="feed">
-          {this.state.postsLoading && (
-            <div style={{ textAlign: 'center', marginTop: '2rem' }}>
-              <Loader />
-            </div>
-          )}
-          {this.state.posts.length <= 0 && !this.state.postsLoading ? (
-            <p style={{ textAlign: 'center' }}>No posts found.</p>
-          ) : null}
-          {!this.state.postsLoading && (
-            <Paginator
-              onPrevious={this.loadPosts.bind(this, 'previous')}
-              onNext={this.loadPosts.bind(this, 'next')}
-              lastPage={Math.ceil(this.state.totalPosts / 2)}
-              currentPage={this.state.postPage}
-            >
-              {this.state.posts.map(post => (
-                <Post
-                  key={post._id}
-                  id={post._id}
-                  author={post.creator.name}
-                  date={new Date(post.createdAt).toLocaleDateString('en-US')}
-                  title={post.title}
-                  image={post.imageUrl}
-                  content={post.content}
-                  onStartEdit={this.startEditPostHandler.bind(this, post._id)}
-                  onDelete={this.deletePostHandler.bind(this, post._id)}
-                />
-              ))}
-            </Paginator>
-          )}
-        </section>
-      </Fragment>
-    );
-  }
-}
+        </form>
+      </section>
+      <section className="feed__control">
+        <Button mode="raised" design="accent" onClick={newPostHandler}>
+          New Post
+        </Button>
+      </section>
+      <section className="feed">
+        {feedState.postsLoading && (
+          <div style={{ textAlign: 'center', marginTop: '2rem' }}>
+            <Loader />
+          </div>
+        )}
+        {feedState.posts.length <= 0 && !feedState.postsLoading ? (
+          <p style={{ textAlign: 'center' }}>No posts found.</p>
+        ) : null}
+        {!feedState.postsLoading && (
+          <Paginator
+            onPrevious={() => loadPosts('previous')}
+            onNext={() => loadPosts('next')}
+            lastPage={Math.ceil(feedState.totalPosts / 2)}
+            currentPage={feedState.postPage}
+          >
+            {feedState.posts.map(post => (
+              <Post
+                key={post._id}
+                id={post._id}
+                author={post.creator.name}
+                date={new Date(post.createdAt).toLocaleDateString('en-US')}
+                title={post.title}
+                image={post.imageUrl}
+                content={post.content}
+                onStartEdit={() => startEditPostHandler(post._id)}
+                onDelete={() => deletePostHandler(post._id)}
+              />
+            ))}
+          </Paginator>
+        )}
+      </section>
+    </Fragment>
+  );
+};
 
 export default Feed;

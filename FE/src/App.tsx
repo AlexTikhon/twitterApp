@@ -1,75 +1,103 @@
 // Coordinates authentication state and switches between auth routes and feed routes.
-import React, { Component, Fragment } from 'react';
-import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
+import React, { Fragment, useEffect, useState } from "react";
+import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
 
-import Layout from './components/Layout/Layout';
-import Backdrop from './components/Backdrop/Backdrop';
-import Toolbar from './components/Toolbar/Toolbar';
-import MainNavigation from './components/Navigation/MainNavigation/MainNavigation';
-import MobileNavigation from './components/Navigation/MobileNavigation/MobileNavigation';
-import ErrorHandler from './components/ErrorHandler/ErrorHandler';
-import FeedPage from './pages/Feed/Feed';
-import SinglePostPage from './pages/Feed/SinglePost/SinglePost';
-import LoginPage from './pages/Auth/Login';
-import SignupPage from './pages/Auth/Signup';
-import { graphqlRequest } from './util/graphql';
-import './App.css';
+import Layout from "./components/Layout/Layout";
+import Backdrop from "./components/Backdrop/Backdrop";
+import Toolbar from "./components/Toolbar/Toolbar";
+import MainNavigation from "./components/Navigation/MainNavigation/MainNavigation";
+import MobileNavigation from "./components/Navigation/MobileNavigation/MobileNavigation";
+import ErrorHandler from "./components/ErrorHandler/ErrorHandler";
+import FeedPage from "./pages/Feed/Feed";
+import SinglePostPage from "./pages/Feed/SinglePost/SinglePost";
+import LoginPage from "./pages/Auth/Login";
+import SignupPage from "./pages/Auth/Signup";
+import { graphqlRequest } from "./util/graphql";
+import "./App.css";
 
-class App extends Component<any, any> {
-	state = {
-		showBackdrop: false,
-		showMobileNav: false,
-		isAuth: false,
-		token: null,
-		userId: null,
-		authLoading: false,
-		error: null
-	};
+type AuthData = {
+  email: string;
+  password: string;
+  name?: string;
+};
 
-	// Restores a saved login session when the app first mounts.
-	componentDidMount() {
-		// Reuse the saved session until the stored expiry time has passed.
-		const token = localStorage.getItem('token');
-		const expiryDate = localStorage.getItem('expiryDate');
-		if (!token || !expiryDate) {
-			return;
-		}
-		if (new Date(expiryDate) <= new Date()) {
-			this.logoutHandler();
-			return;
-		}
-		const userId = localStorage.getItem('userId');
-		const remainingMilliseconds =
-			new Date(expiryDate).getTime() - new Date().getTime();
-		this.setState({ isAuth: true, token: token, userId: userId });
-		this.setAutoLogout(remainingMilliseconds);
-	}
+type LoginResponse = {
+  login: {
+    token: string;
+    userId: string;
+    expiresIn: number;
+  };
+};
 
-	// Opens or closes the mobile navigation and matching backdrop together.
-	mobileNavHandler = isOpen => {
-		this.setState({ showMobileNav: isOpen, showBackdrop: isOpen });
-	};
+const App = () => {
+  const navigate = useNavigate();
+  const [showBackdrop, setShowBackdrop] = useState(false);
+  const [showMobileNav, setShowMobileNav] = useState(false);
+  const [isAuth, setIsAuth] = useState(false);
+  const [token, setToken] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
 
-	// Closes transient overlay UI and clears any visible error.
-	backdropClickHandler = () => {
-		this.setState({ showBackdrop: false, showMobileNav: false, error: null });
-	};
+  const logoutHandler = () => {
+    setIsAuth(false);
+    setToken(null);
+    localStorage.removeItem("token");
+    localStorage.removeItem("expiryDate");
+    localStorage.removeItem("userId");
+  };
 
-	// Clears auth state and removes the persisted session from storage.
-	logoutHandler = () => {
-		this.setState({ isAuth: false, token: null });
-		localStorage.removeItem('token');
-		localStorage.removeItem('expiryDate');
-		localStorage.removeItem('userId');
-	};
+  const setAutoLogout = (milliseconds: number) => {
+    // The timeout mirrors the JWT expiry so stale tokens are cleared automatically.
+    setTimeout(() => {
+      logoutHandler();
+    }, milliseconds);
+  };
 
-	// Sends login credentials to GraphQL and stores the returned session.
-	loginHandler = async (event, authData) => {
-		event.preventDefault();
-		this.setState({ authLoading: true });
-		try {
-			const data = await graphqlRequest({
-				query: `
+  // Restores a saved login session when the app first mounts.
+  useEffect(() => {
+    // Reuse the saved session until the stored expiry time has passed.
+    const storedToken = localStorage.getItem("token");
+    const expiryDate = localStorage.getItem("expiryDate");
+    if (!storedToken || !expiryDate) {
+      return;
+    }
+    if (new Date(expiryDate) <= new Date()) {
+      logoutHandler();
+      return;
+    }
+    const storedUserId = localStorage.getItem("userId");
+    const remainingMilliseconds =
+      new Date(expiryDate).getTime() - new Date().getTime();
+    setIsAuth(true);
+    setToken(storedToken);
+    setUserId(storedUserId);
+    setAutoLogout(remainingMilliseconds);
+  }, []);
+
+  // Opens or closes the mobile navigation and matching backdrop together.
+  const mobileNavHandler = (isOpen: boolean) => {
+    setShowMobileNav(isOpen);
+    setShowBackdrop(isOpen);
+  };
+
+	// Closes transient overlay UI and clears the visible error.
+  const backdropClickHandler = () => {
+    setShowBackdrop(false);
+    setShowMobileNav(false);
+    setError(null);
+  };
+
+  // Sends login credentials to GraphQL and stores the returned session.
+  const loginHandler = async (
+    event: React.FormEvent<HTMLFormElement>,
+    authData: AuthData,
+  ) => {
+    event.preventDefault();
+    setAuthLoading(true);
+    try {
+      const data = await graphqlRequest<LoginResponse>({
+        query: `
 					mutation Login($email: String!, $password: String!) {
 						login(email: $email, password: $password) {
 							token
@@ -78,39 +106,38 @@ class App extends Component<any, any> {
 						}
 					}
 				`,
-				variables: authData
-			});
+        variables: authData,
+      });
 
-			this.setState({
-				isAuth: true,
-				token: data.login.token,
-				authLoading: false,
-				userId: data.login.userId
-			});
-			localStorage.setItem('token', data.login.token);
-			localStorage.setItem('userId', data.login.userId);
-			// The backend returns the token lifetime in seconds.
-			const remainingMilliseconds = data.login.expiresIn * 1000;
-			const expiryDate = new Date(new Date().getTime() + remainingMilliseconds);
-			localStorage.setItem('expiryDate', expiryDate.toISOString());
-			this.setAutoLogout(remainingMilliseconds);
-		} catch (err) {
-			console.log(err);
-			this.setState({
-				isAuth: false,
-				authLoading: false,
-				error: err
-			});
-		}
-	};
+      setIsAuth(true);
+      setToken(data.login.token);
+      setAuthLoading(false);
+      setUserId(data.login.userId);
+      localStorage.setItem("token", data.login.token);
+      localStorage.setItem("userId", data.login.userId);
+      // The backend returns the token lifetime in seconds.
+      const remainingMilliseconds = data.login.expiresIn * 1000;
+      const expiryDate = new Date(new Date().getTime() + remainingMilliseconds);
+      localStorage.setItem("expiryDate", expiryDate.toISOString());
+      setAutoLogout(remainingMilliseconds);
+    } catch (err) {
+      console.log(err);
+      setIsAuth(false);
+      setAuthLoading(false);
+      setError(err instanceof Error ? err : new Error("Login failed."));
+    }
+  };
 
-	// Creates a user account and sends the user back to the login route.
-	signupHandler = async (event, authData) => {
-		event.preventDefault();
-		this.setState({ authLoading: true });
-		try {
-			await graphqlRequest({
-				query: `
+  // Creates a user account and sends the user back to the login route.
+  const signupHandler = async (
+    event: React.FormEvent<HTMLFormElement>,
+    authData: AuthData,
+  ) => {
+    event.preventDefault();
+    setAuthLoading(true);
+    try {
+      await graphqlRequest({
+        query: `
 					mutation CreateUser($email: String!, $name: String!, $password: String!) {
 						createUser(
 							userInput: { email: $email, name: $name, password: $password }
@@ -119,118 +146,78 @@ class App extends Component<any, any> {
 						}
 					}
 				`,
-				variables: authData
-			});
-			this.setState({ isAuth: false, authLoading: false });
-			this.props.navigate('/');
-		} catch (err) {
-			console.log(err);
-			this.setState({
-				isAuth: false,
-				authLoading: false,
-				error: err
-			});
-		}
-	};
+        variables: authData,
+      });
+      setIsAuth(false);
+      setAuthLoading(false);
+      navigate("/");
+    } catch (err) {
+      console.log(err);
+      setIsAuth(false);
+      setAuthLoading(false);
+      setError(err instanceof Error ? err : new Error("Signup failed."));
+    }
+  };
 
-	// Schedules logout when the current JWT expiry time is reached.
-	setAutoLogout = milliseconds => {
-		// The timeout mirrors the JWT expiry so stale tokens are cleared automatically.
-		setTimeout(() => {
-			this.logoutHandler();
-		}, milliseconds);
-	};
+  // Clears the global error modal state.
+  const errorHandler = () => {
+    setError(null);
+  };
 
-	// Clears the global error modal state.
-	errorHandler = () => {
-		this.setState({ error: null });
-	};
-
-	// Selects the route tree based on whether the user is authenticated.
-	render() {
-		let routes = (
-			<Routes>
-				<Route
-					path="/"
-					element={
-						<LoginPage
-							onLogin={this.loginHandler}
-							loading={this.state.authLoading}
-						/>
-					}
-				/>
-				<Route
-					path="/signup"
-					element={
-						<SignupPage
-							onSignup={this.signupHandler}
-							loading={this.state.authLoading}
-						/>
-					}
-				/>
-				<Route path="*" element={<Navigate to="/" replace />} />
-			</Routes>
-		);
-		if (this.state.isAuth) {
-			// Authenticated users can access the feed and individual post pages.
-			routes = (
-				<Routes>
-					<Route
-						path="/"
-						element={
-							<FeedPage userId={this.state.userId} token={this.state.token} />
-						}
-					/>
-					<Route
-						path="/:postId"
-						element={
-							<SinglePostPage
-								userId={this.state.userId}
-								token={this.state.token}
-							/>
-						}
-					/>
-					<Route path="*" element={<Navigate to="/" replace />} />
-				</Routes>
-			);
-		}
-		return (
-			<Fragment>
-				{this.state.showBackdrop && (
-					<Backdrop onClick={this.backdropClickHandler} />
-				)}
-				<ErrorHandler error={this.state.error} onHandle={this.errorHandler} />
-				<Layout
-					header={
-						<Toolbar>
-							<MainNavigation
-								onOpenMobileNav={this.mobileNavHandler.bind(this, true)}
-								onLogout={this.logoutHandler}
-								isAuth={this.state.isAuth}
-							/>
-						</Toolbar>
-					}
-					mobileNav={
-						<MobileNavigation
-							open={this.state.showMobileNav}
-							mobile
-							onChooseItem={this.mobileNavHandler.bind(this, false)}
-							onLogout={this.logoutHandler}
-							isAuth={this.state.isAuth}
-						/>
-					}
-				/>
-				{routes}
-			</Fragment>
-		);
-	}
-}
-
-// Injects React Router navigation into the class-based App component.
-const AppWithRouter = () => {
-	const navigate = useNavigate();
-
-	return <App navigate={navigate} />;
+  // Selects the route tree based on whether the user is authenticated.
+  let routes = (
+    <Routes>
+      <Route
+        path="/"
+        element={<LoginPage onLogin={loginHandler} loading={authLoading} />}
+      />
+      <Route
+        path="/signup"
+        element={<SignupPage onSignup={signupHandler} loading={authLoading} />}
+      />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+  if (isAuth) {
+    // Authenticated users can access the feed and individual post pages.
+    routes = (
+      <Routes>
+        <Route path="/" element={<FeedPage userId={userId} token={token} />} />
+        <Route
+          path="/:postId"
+          element={<SinglePostPage userId={userId} token={token} />}
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    );
+  }
+  return (
+    <Fragment>
+      {showBackdrop && <Backdrop onClick={backdropClickHandler} />}
+      <ErrorHandler error={error} onHandle={errorHandler} />
+      <Layout
+        header={
+          <Toolbar>
+            <MainNavigation
+              onOpenMobileNav={() => mobileNavHandler(true)}
+              onLogout={logoutHandler}
+              isAuth={isAuth}
+            />
+          </Toolbar>
+        }
+        mobileNav={
+          <MobileNavigation
+            open={showMobileNav}
+            mobile
+            onChooseItem={() => mobileNavHandler(false)}
+            onLogout={logoutHandler}
+            isAuth={isAuth}
+          />
+        }
+      />
+      {routes}
+    </Fragment>
+  );
 };
 
-export default AppWithRouter;
+export default App;

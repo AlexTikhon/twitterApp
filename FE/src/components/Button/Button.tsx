@@ -4,8 +4,19 @@ import { Link } from 'react-router-dom';
 
 import './Button.css';
 
+type ButtonProps = {
+  children: React.ReactNode;
+  design?: string;
+  mode?: string;
+  link?: string;
+  loading?: boolean;
+  disabled?: boolean;
+  type?: 'button' | 'submit' | 'reset';
+  onClick?: React.MouseEventHandler<HTMLButtonElement>;
+};
+
 // Renders a styled button or router link depending on the link prop.
-const button = props =>
+const button = (props: ButtonProps) =>
   !props.link ? (
     <button
       className={[

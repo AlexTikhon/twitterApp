@@ -1,5 +1,5 @@
 // Modal form used for both creating a post and editing an existing one.
-import React, { Component, Fragment } from 'react';
+import React, { Fragment, useEffect, useState } from 'react';
 
 import Backdrop from '../../Backdrop/Backdrop';
 import Modal from '../../Modal/Modal';
@@ -9,7 +9,40 @@ import Image from '../../Image/Image';
 import { required, length } from '../../../util/validators';
 import { generateBase64FromImage } from '../../../util/image';
 
-const POST_FORM = {
+export type PostEditorData = {
+	title: string;
+	image: string;
+	content: string;
+};
+
+type FeedEditPost = {
+	_id: string;
+	title: string;
+	content: string;
+	imageUrl: string;
+};
+
+type FeedEditProps = {
+	editing: boolean;
+	selectedPost: FeedEditPost | null;
+	loading: boolean;
+	onCancelEdit: () => void;
+	onFinishEdit: (post: PostEditorData) => void | Promise<void>;
+};
+
+type Validator = (value: string) => boolean;
+type PostFormFieldId = keyof PostEditorData;
+
+type PostFormField = {
+	value: string;
+	valid: boolean;
+	touched: boolean;
+	validators: Validator[];
+};
+
+type PostForm = Record<PostFormFieldId, PostFormField>;
+
+const POST_FORM: PostForm = {
 	title: {
 		value: '',
 		valid: false,
@@ -30,58 +63,59 @@ const POST_FORM = {
 	}
 };
 
-class FeedEdit extends Component<any, any> {
-	state = {
-		postForm: POST_FORM,
-		formIsValid: false,
-		imagePreview: null
+const FeedEdit = (props: FeedEditProps) => {
+	const [postForm, setPostForm] = useState(POST_FORM);
+	const [imagePreview, setImagePreview] = useState<string | null>(null);
+
+	const getFormIsValid = (updatedForm: PostForm) => {
+		let nextFormIsValid = true;
+		for (const inputName of Object.keys(updatedForm) as PostFormFieldId[]) {
+			nextFormIsValid = nextFormIsValid && updatedForm[inputName].valid;
+		}
+		return nextFormIsValid;
 	};
 
+	const formIsValid = getFormIsValid(postForm);
+
 	// Resets or preloads the form whenever the editor modal opens.
-	componentDidUpdate(prevProps, prevState) {
+	useEffect(() => {
 		// Opening the modal for a new post resets the form to its empty state.
-		if (this.props.editing && prevProps.editing !== this.props.editing && !this.props.selectedPost) {
-			this.setState({
-				postForm: POST_FORM,
-				formIsValid: false,
-				imagePreview: null
-			});
+		if (props.editing && !props.selectedPost) {
+			setPostForm(POST_FORM);
+			setImagePreview(null);
 			return;
 		}
 
-		if (
-			this.props.editing &&
-			prevProps.editing !== this.props.editing &&
-			prevProps.selectedPost !== this.props.selectedPost
-		) {
+		if (props.editing && props.selectedPost) {
 			const postForm = {
 				title: {
-					...prevState.postForm.title,
-					value: this.props.selectedPost.title,
+					...POST_FORM.title,
+					value: props.selectedPost.title,
 					valid: true
 				},
 				image: {
-					...prevState.postForm.image,
-					value: this.props.selectedPost.imageUrl || '',
+					...POST_FORM.image,
+					value: props.selectedPost.imageUrl || '',
 					valid: true
 				},
 				content: {
-					...prevState.postForm.content,
-					value: this.props.selectedPost.content,
+					...POST_FORM.content,
+					value: props.selectedPost.content,
 					valid: true
 				}
 			};
-			this.setState({
-				postForm: postForm,
-				formIsValid: true,
-				// Existing posts show the stored image immediately in the preview area.
-				imagePreview: this.props.selectedPost.imageUrl || null
-			});
+			setPostForm(postForm);
+			// Existing posts show the stored image immediately in the preview area.
+			setImagePreview(props.selectedPost.imageUrl || null);
 		}
-	}
+	}, [props.editing, props.selectedPost]);
 
 	// Updates field state and converts selected image files to base64 previews.
-	postInputChangeHandler = async (input, value, files) => {
+	const postInputChangeHandler = async (
+		input: PostFormFieldId,
+		value: string,
+		files?: FileList | null
+	) => {
 		let updatedValue = value;
 
 		if (files && files.length > 0) {
@@ -89,131 +123,111 @@ class FeedEdit extends Component<any, any> {
 				// Image files are converted to base64 because the project now uploads via GraphQL.
 				const b64 = await generateBase64FromImage(files[0]);
 				updatedValue = b64;
-				this.setState({ imagePreview: b64 });
+				setImagePreview(b64);
 			} catch (err) {
 				console.log(err);
-				this.setState({ imagePreview: null });
+				setImagePreview(null);
 			}
 		}
-		this.setState(prevState => {
+		setPostForm(prevPostForm => {
 			let isValid = true;
-			for (const validator of prevState.postForm[input].validators) {
+			for (const validator of prevPostForm[input].validators) {
 				isValid = isValid && validator(value);
 			}
 			const updatedForm = {
-				...prevState.postForm,
+				...prevPostForm,
 				[input]: {
-					...prevState.postForm[input],
+					...prevPostForm[input],
 					valid: isValid,
 					value: updatedValue
 				}
 			};
-			// The modal accept button only unlocks when every field is valid.
-			let formIsValid = true;
-			for (const inputName in updatedForm) {
-				formIsValid = formIsValid && updatedForm[inputName].valid;
-			}
-			return {
-				postForm: updatedForm,
-				formIsValid: formIsValid
-			};
+			return updatedForm;
 		});
 	};
 
 	// Marks a field as touched so validation styling can appear.
-	inputBlurHandler = input => {
-		this.setState(prevState => {
+	const inputBlurHandler = (input: PostFormFieldId) => {
+		setPostForm(prevPostForm => {
 			return {
-				postForm: {
-					...prevState.postForm,
-					[input]: {
-						...prevState.postForm[input],
-						touched: true
-					}
+				...prevPostForm,
+				[input]: {
+					...prevPostForm[input],
+					touched: true
 				}
 			};
 		});
 	};
 
 	// Resets editor state and informs the parent that editing was cancelled.
-	cancelPostChangeHandler = () => {
-		this.setState({
-			postForm: POST_FORM,
-			formIsValid: false,
-			imagePreview: null
-		});
-		this.props.onCancelEdit();
+	const cancelPostChangeHandler = () => {
+		setPostForm(POST_FORM);
+		setImagePreview(null);
+		props.onCancelEdit();
 	};
 
 	// Emits the current post form payload and resets the modal state.
-	acceptPostChangeHandler = () => {
+	const acceptPostChangeHandler = () => {
 		const post = {
-			title: this.state.postForm.title.value,
-			image: this.state.postForm.image.value,
-			content: this.state.postForm.content.value
+			title: postForm.title.value,
+			image: postForm.image.value,
+			content: postForm.content.value
 		};
-		this.props.onFinishEdit(post);
-		this.setState({
-			postForm: POST_FORM,
-			formIsValid: false,
-			imagePreview: null
-		});
+		props.onFinishEdit(post);
+		setPostForm(POST_FORM);
+		setImagePreview(null);
 	};
 
 	// Renders the modal editor only while the parent marks it as open.
-	render() {
-		return this.props.editing ? (
-			<Fragment>
-				<Backdrop onClick={this.cancelPostChangeHandler} />
-				<Modal
-					title="New Post"
-					acceptEnabled={this.state.formIsValid}
-					onCancelModal={this.cancelPostChangeHandler}
-					onAcceptModal={this.acceptPostChangeHandler}
-					isLoading={this.props.loading}
-				>
-					<form>
-						<Input
-							id="title"
-							label="Title"
-							control="input"
-							onChange={this.postInputChangeHandler}
-							onBlur={this.inputBlurHandler.bind(this, 'title')}
-							valid={this.state.postForm['title'].valid}
-							touched={this.state.postForm['title'].touched}
-							value={this.state.postForm['title'].value}
-						/>
-						<FilePicker
-							id="image"
-							label="Image"
-							control="input"
-							onChange={this.postInputChangeHandler}
-							onBlur={this.inputBlurHandler.bind(this, 'image')}
-							valid={this.state.postForm['image'].valid}
-							touched={this.state.postForm['image'].touched}
-						/>
-						<div className="new-post__preview-image">
-							{!this.state.imagePreview && <p>Please choose an image.</p>}
-							{this.state.imagePreview && (
-								<Image imageUrl={this.state.imagePreview} contain left />
-							)}
-						</div>
-						<Input
-							id="content"
-							label="Content"
-							control="textarea"
-							rows="5"
-							onChange={this.postInputChangeHandler}
-							onBlur={this.inputBlurHandler.bind(this, 'content')}
-							valid={this.state.postForm['content'].valid}
-							touched={this.state.postForm['content'].touched}
-							value={this.state.postForm['content'].value}
-						/>
-					</form>
-				</Modal>
-			</Fragment>
-		) : null;
-	}
-}
+	return props.editing ? (
+		<Fragment>
+			<Backdrop onClick={cancelPostChangeHandler} />
+			<Modal
+				title="New Post"
+				acceptEnabled={formIsValid}
+				onCancelModal={cancelPostChangeHandler}
+				onAcceptModal={acceptPostChangeHandler}
+				isLoading={props.loading}
+			>
+				<form>
+					<Input
+						id="title"
+						label="Title"
+						control="input"
+						onChange={postInputChangeHandler}
+						onBlur={() => inputBlurHandler('title')}
+						valid={postForm['title'].valid}
+						touched={postForm['title'].touched}
+						value={postForm['title'].value}
+					/>
+					<FilePicker
+						id="image"
+						label="Image"
+						control="input"
+						onChange={postInputChangeHandler}
+						onBlur={() => inputBlurHandler('image')}
+						valid={postForm['image'].valid}
+						touched={postForm['image'].touched}
+					/>
+					<div className="new-post__preview-image">
+						{!imagePreview && <p>Please choose an image.</p>}
+						{imagePreview && <Image imageUrl={imagePreview} contain left />}
+					</div>
+					<Input
+						id="content"
+						label="Content"
+						control="textarea"
+						rows="5"
+						onChange={postInputChangeHandler}
+						onBlur={() => inputBlurHandler('content')}
+						valid={postForm['content'].valid}
+						touched={postForm['content'].touched}
+						value={postForm['content'].value}
+					/>
+				</form>
+			</Modal>
+		</Fragment>
+	) : null;
+};
 
 export default FeedEdit;
