@@ -8,6 +8,9 @@ const clearImage = require('../util/file');
 const saveImageFromBase64 = require('../util/image');
 const socket = require('../socket');
 
+const DEFAULT_POSTS_PAGE_SIZE = 2;
+const DEFAULT_MAX_POSTS_PAGE_SIZE = 20;
+
 // Creates an error object carrying HTTP-like metadata for Apollo formatting.
 const createError = (message, statusCode, data = null) => {
   const error = new Error(message);
@@ -22,6 +25,28 @@ const formatDate = date => new Date(date).toISOString();
 // Trims strings safely while converting non-strings to an empty value.
 const normalizeString = value =>
   typeof value === 'string' ? value.trim() : '';
+
+// Reads a positive integer env value while falling back to a safe default.
+const getPositiveIntegerEnv = (name, fallback) => {
+  const value = Number(process.env[name]);
+
+  return Number.isInteger(value) && value > 0 ? value : fallback;
+};
+
+// Keeps pagination requests bounded even when callers provide a large limit.
+const getBoundedPagination = (page, limit) => {
+  const currentPage = Math.max(Number(page) || 1, 1);
+  const requestedLimit = Math.max(Number(limit) || DEFAULT_POSTS_PAGE_SIZE, 1);
+  const maxLimit = getPositiveIntegerEnv(
+    'POSTS_PAGE_SIZE_LIMIT',
+    DEFAULT_MAX_POSTS_PAGE_SIZE
+  );
+
+  return {
+    currentPage,
+    perPage: Math.min(requestedLimit, maxLimit)
+  };
+};
 
 // Checks whether a normalized email has a basic valid email shape.
 const validateEmail = email =>
@@ -249,11 +274,10 @@ const rootResolvers = {
     };
   },
   // Returns a paginated feed for the authenticated user.
-  posts: async ({ page = 1, limit = 2 }, req) => {
+  posts: async ({ page = 1, limit = DEFAULT_POSTS_PAGE_SIZE }, req) => {
     ensureAuth(req);
 
-    const currentPage = Math.max(Number(page) || 1, 1);
-    const perPage = Math.max(Number(limit) || 2, 1);
+    const { currentPage, perPage } = getBoundedPagination(page, limit);
     const totalItems = await Post.find().countDocuments();
     const loadedPosts = await Post.find()
       .sort({ createdAt: -1 })

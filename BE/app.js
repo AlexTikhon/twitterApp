@@ -23,6 +23,7 @@ const app = express();
 const server = http.createServer(app);
 const port = process.env.PORT || 8080;
 const mongoDbUri = process.env.MONGODB_URI;
+const jsonBodyLimit = process.env.JSON_BODY_LIMIT || '8mb';
 const isProduction = process.env.NODE_ENV === 'production';
 const defaultCorsOrigins = ['http://localhost:3000', 'http://127.0.0.1:3000'];
 
@@ -64,7 +65,7 @@ app.use(
   })
 );
 app.use(compression());
-app.use(express.json());
+app.use(express.json({ limit: jsonBodyLimit }));
 app.use(isAuth);
 app.use('/images', express.static(path.join(__dirname, 'images')));
 
@@ -80,7 +81,7 @@ const notFoundHandler = (req, res) => {
 
 // Normalizes thrown Express errors into the API error response shape.
 const errorHandler = (error, req, res, next) => {
-  const status = error.statusCode || 500;
+  const status = error.statusCode || error.status || 500;
   const message = error.message || 'Internal server error';
   const data = error.data || null;
 
