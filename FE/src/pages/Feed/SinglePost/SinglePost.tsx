@@ -3,12 +3,13 @@ import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
 import Image from '../../../components/Image/Image';
-import { graphqlRequest } from '../../../util/graphql';
+import { graphqlRequest, isUnauthorizedError } from '../../../util/graphql';
 import './SinglePost.css';
 
 type SinglePostProps = {
   token: string | null;
   userId?: string | null;
+  onLogout: () => void;
 };
 
 type LoadedPost = {
@@ -76,6 +77,9 @@ const SinglePost = (props: SinglePostProps) => {
       });
     } catch (err) {
       console.log(err);
+      if (isUnauthorizedError(err)) {
+        props.onLogout();
+      }
     }
   };
 

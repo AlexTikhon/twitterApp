@@ -42,6 +42,7 @@ const App = () => {
   const logoutHandler = () => {
     setIsAuth(false);
     setToken(null);
+    setUserId(null);
     localStorage.removeItem("token");
     localStorage.removeItem("expiryDate");
     localStorage.removeItem("userId");
@@ -182,10 +183,21 @@ const App = () => {
     // Authenticated users can access the feed and individual post pages.
     routes = (
       <Routes>
-        <Route path="/" element={<FeedPage userId={userId} token={token} />} />
+        <Route
+          path="/"
+          element={
+            <FeedPage userId={userId} token={token} onLogout={logoutHandler} />
+          }
+        />
         <Route
           path="/:postId"
-          element={<SinglePostPage userId={userId} token={token} />}
+          element={
+            <SinglePostPage
+              userId={userId}
+              token={token}
+              onLogout={logoutHandler}
+            />
+          }
         />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

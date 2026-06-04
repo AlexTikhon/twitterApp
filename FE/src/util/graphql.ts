@@ -9,6 +9,18 @@ type GraphqlRequestOptions = {
   token?: string | null;
 };
 
+export type GraphqlRequestError = Error & {
+  data?: unknown;
+  statusCode?: number;
+};
+
+export const isUnauthorizedError = (error: unknown) =>
+  Boolean(
+    error &&
+      typeof error === 'object' &&
+      (error as GraphqlRequestError).statusCode === 401
+  );
+
 // Creates an Apollo client for one request with optional bearer auth headers.
 const createClient = (token?: string | null) => {
   const headers: Record<string, string> = {};
@@ -71,7 +83,7 @@ export const graphqlRequest = async <TData = unknown>({
     const graphqlError = apolloError.graphQLErrors?.[0];
     const error = new Error(
       graphqlError?.message || apolloError.message || 'GraphQL request failed.'
-    ) as Error & { data?: unknown; statusCode?: number };
+    ) as GraphqlRequestError;
 
     error.data = graphqlError?.data || null;
     error.statusCode =

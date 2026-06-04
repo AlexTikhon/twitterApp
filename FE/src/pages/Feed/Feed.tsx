@@ -11,12 +11,13 @@ import Paginator from '../../components/Paginator/Paginator';
 import Loader from '../../components/Loader/Loader';
 import ErrorHandler from '../../components/ErrorHandler/ErrorHandler';
 import { API_URL } from '../../config';
-import { graphqlRequest } from '../../util/graphql';
+import { graphqlRequest, isUnauthorizedError } from '../../util/graphql';
 import './Feed.css';
 
 type FeedProps = {
   token: string | null;
   userId?: string | null;
+  onLogout: () => void;
 };
 
 type PostCreator = {
@@ -398,6 +399,11 @@ const Feed = (props: FeedProps) => {
       }
     } catch (err) {
       console.log(err);
+      if (isUnauthorizedError(err)) {
+        props.onLogout();
+        return;
+      }
+
       setFeedState(prevState => ({
         ...prevState,
         isEditing: false,
@@ -434,6 +440,11 @@ const Feed = (props: FeedProps) => {
       removePost(postId);
     } catch (err) {
       console.log(err);
+      if (isUnauthorizedError(err)) {
+        props.onLogout();
+        return;
+      }
+
       setFeedState(prevState => ({ ...prevState, postsLoading: false }));
     }
   };
@@ -445,6 +456,11 @@ const Feed = (props: FeedProps) => {
 
   // Stores a caught request error so the shared error modal can show it.
   const catchError = (error: unknown) => {
+    if (isUnauthorizedError(error)) {
+      props.onLogout();
+      return;
+    }
+
     setFeedState(prevState => ({
       ...prevState,
       error: normalizeError(error, 'Feed request failed.')

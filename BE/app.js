@@ -24,6 +24,7 @@ const app = express();
 const server = http.createServer(app);
 const port = process.env.PORT || 8080;
 const mongoDbUri = process.env.MONGODB_URI;
+const jwtSecret = process.env.JWT_SECRET;
 const jsonBodyLimit = process.env.JSON_BODY_LIMIT || '8mb';
 const isProduction = process.env.NODE_ENV === 'production';
 const defaultCorsOrigins = ['http://localhost:3000', 'http://127.0.0.1:3000'];
@@ -137,6 +138,10 @@ const errorHandler = (error, req, res, next) => {
 
 if (!mongoDbUri) {
   throw new Error('MONGODB_URI is missing. Add it to your .env file.');
+}
+
+if (!jwtSecret) {
+  throw new Error('JWT_SECRET is missing. Add it to your .env file.');
 }
 
 // The HTTP server is shared with Socket.IO so GraphQL and realtime updates use

@@ -55,6 +55,7 @@ const INITIAL_SIGNUP_FORM: SignupForm = {
 
 const Signup = (props: SignupProps) => {
   const [signupForm, setSignupForm] = useState(INITIAL_SIGNUP_FORM);
+  const formIsValid = Object.values(signupForm).every(field => field.valid);
 
   // Updates one signup field and recalculates the form validity.
   const inputChangeHandler = (input: SignupFieldId, value: string) => {
@@ -133,7 +134,12 @@ const Signup = (props: SignupProps) => {
           valid={signupForm['password'].valid}
           touched={signupForm['password'].touched}
         />
-        <Button design="raised" type="submit" loading={props.loading}>
+        <Button
+          design="raised"
+          type="submit"
+          loading={props.loading}
+          disabled={!formIsValid}
+        >
           Signup
         </Button>
       </form>

@@ -48,6 +48,7 @@ const INITIAL_LOGIN_FORM: LoginForm = {
 
 const Login = (props: LoginProps) => {
   const [loginForm, setLoginForm] = useState(INITIAL_LOGIN_FORM);
+  const formIsValid = Object.values(loginForm).every(field => field.valid);
 
   // Updates one login field and recalculates the form validity.
   const inputChangeHandler = (input: LoginFieldId, value: string) => {
@@ -114,7 +115,12 @@ const Login = (props: LoginProps) => {
           valid={loginForm['password'].valid}
           touched={loginForm['password'].touched}
         />
-        <Button design="raised" type="submit" loading={props.loading}>
+        <Button
+          design="raised"
+          type="submit"
+          loading={props.loading}
+          disabled={!formIsValid}
+        >
           Login
         </Button>
       </form>

@@ -1,6 +1,7 @@
 // Implements the GraphQL operations for auth, feed management, and user status.
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { Types } = require('mongoose');
 
 const User = require('../models/user');
 const Post = require('../models/post');
@@ -25,6 +26,17 @@ const formatDate = date => new Date(date).toISOString();
 // Trims strings safely while converting non-strings to an empty value.
 const normalizeString = value =>
   typeof value === 'string' ? value.trim() : '';
+
+// Rejects malformed MongoDB ids before they reach Mongoose queries.
+const validateObjectId = (id, field = 'id') => {
+  if (
+    typeof id !== 'string' ||
+    !/^[0-9a-fA-F]{24}$/.test(id) ||
+    !Types.ObjectId.isValid(id)
+  ) {
+    throw createError(`Invalid ${field}.`, 400);
+  }
+};
 
 // Reads a positive integer env value while falling back to a safe default.
 const getPositiveIntegerEnv = (name, fallback) => {
@@ -57,6 +69,8 @@ const ensureAuth = req => {
   if (!req.isAuth) {
     throw createError('Not authenticated.', 401);
   }
+
+  validateObjectId(req.userId, 'user id');
 };
 
 // Validates and normalizes signup input before creating a user.
@@ -292,6 +306,7 @@ const rootResolvers = {
   // Returns one post by id for the authenticated single-post page.
   post: async ({ id }, req) => {
     ensureAuth(req);
+    validateObjectId(id);
 
     const post = await Post.findById(id);
 
@@ -355,6 +370,7 @@ const rootResolvers = {
   // Updates a post owned by the current user and broadcasts the new snapshot.
   updatePost: async ({ id, postInput }, req) => {
     ensureAuth(req);
+    validateObjectId(id);
 
     const validatedPostInput = validatePostInput(postInput);
     const post = await Post.findById(id);
@@ -400,6 +416,7 @@ const rootResolvers = {
   // Deletes a post owned by the current user and broadcasts the removal.
   deletePost: async ({ id }, req) => {
     ensureAuth(req);
+    validateObjectId(id);
 
     const post = await Post.findById(id);
 

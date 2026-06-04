@@ -21,4 +21,5 @@ services:
     ports:
       - "80:80"
 
-volumes: backend_images
+volumes:
+  backend_images:
