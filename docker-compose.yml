@@ -2,20 +2,20 @@ services:
   backend:
     build:
       context: ./BE
-    restart: always
+    restart: unless-stopped
     env_file:
       - ./BE/.env
     volumes:
       - backend_images:/app/images
-    ports:
-      - "8080:8080"
+    expose:
+      - "8080"
 
   frontend:
     build:
       context: ./FE
       args:
         VITE_API_URL: ${VITE_API_URL}
-    restart: always
+    restart: unless-stopped
     depends_on:
       - backend
     ports:
