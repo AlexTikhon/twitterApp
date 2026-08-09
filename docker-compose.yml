@@ -4,10 +4,21 @@ services:
       context: ./BE
     restart: unless-stopped
     init: true
+    read_only: true
+    stop_grace_period: 15s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 200
     env_file:
       - ./BE/.env
+    environment:
+      NODE_ENV: production
     volumes:
       - backend_images:/app/images
+    tmpfs:
+      - /tmp:size=64m,mode=1777,noexec,nosuid,nodev
     expose:
       - '8080'
     healthcheck:
@@ -27,11 +38,25 @@ services:
     build:
       context: ./FE
     restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 100
+    tmpfs:
+      - /tmp:size=32m,mode=1777,noexec,nosuid,nodev
     depends_on:
       backend:
         condition: service_healthy
     ports:
-      - '80:80'
+      - '80:8080'
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '--spider', 'http://127.0.0.1:8080/']
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
 
 volumes:
   backend_images:

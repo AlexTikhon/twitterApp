@@ -9,7 +9,6 @@ const { rateLimit } = require('express-rate-limit');
 const { parse, visit } = require('graphql');
 const helmet = require('helmet');
 const mongoose = require('mongoose');
-const morgan = require('morgan');
 
 const { loadConfig } = require('./config');
 const { createDependencies } = require('./dependencies');
@@ -23,6 +22,9 @@ const {
   requireImageUploadAuth
 } = require('./http/image-upload');
 const { createAuthMiddleware } = require('./middleware/is-auth');
+const { createShutdownController } = require('./lifecycle');
+const { createErrorMonitor, normalizeError } = require('./observability/error-monitor');
+const { createBootstrapLogger, createHttpLogger, createLogger } = require('./observability/logger');
 const socket = require('./socket');
 
 const createRateLimiter = (windowMs, max, message) =>
@@ -31,7 +33,7 @@ const createRateLimiter = (windowMs, max, message) =>
     limit: max,
     standardHeaders: true,
     legacyHeaders: false,
-    skip: (req) => req.method === 'OPTIONS' || req.path === '/health',
+    skip: (req) => req.method === 'OPTIONS' || req.path.startsWith('/health'),
     message: { message, data: null }
   });
 
@@ -70,17 +72,19 @@ const createCorsOptions = (allowedOrigins) => ({
     callback(error);
   },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID'],
+  exposedHeaders: ['X-Request-ID']
 });
+
+const getErrorStatus = (formattedError, error) => {
+  const originalError = error.originalError || {};
+  const isValidationError = formattedError.extensions?.code === 'GRAPHQL_VALIDATION_FAILED';
+  return originalError.statusCode || (isValidationError ? 400 : 500);
+};
 
 const formatGraphqlError = (formattedError, error) => {
   const originalError = error.originalError || {};
-  const isValidationError = formattedError.extensions?.code === 'GRAPHQL_VALIDATION_FAILED';
-  const status = originalError.statusCode || (isValidationError ? 400 : 500);
-
-  if (status >= 500) {
-    console.error('Unhandled GraphQL error:', error);
-  }
+  const status = getErrorStatus(formattedError, error);
 
   return {
     message:
@@ -90,11 +94,41 @@ const formatGraphqlError = (formattedError, error) => {
   };
 };
 
-const startServer = async ({ env = process.env } = {}) => {
+const createGraphqlErrorPlugin = (errorMonitor) => ({
+  async requestDidStart() {
+    return {
+      async didEncounterErrors({ contextValue, errors, operationName }) {
+        for (const error of errors) {
+          const formattedError = error.toJSON ? error.toJSON() : error;
+          if (getErrorStatus(formattedError, error) < 500) {
+            continue;
+          }
+
+          const requestId = contextValue?.req?.id;
+          const applicationError = error.originalError || error;
+          contextValue?.req?.log?.error(
+            { err: applicationError, operationName },
+            'Unhandled GraphQL error'
+          );
+          errorMonitor.capture(applicationError, {
+            requestId,
+            operationName,
+            userId: contextValue?.req?.userId
+          });
+        }
+      }
+    };
+  }
+});
+
+const startServer = async ({ env = process.env, loggerDestination } = {}) => {
   const config = loadConfig(env);
+  const logger = createLogger(config, loggerDestination);
+  const errorMonitor = createErrorMonitor(config);
   const app = express();
   const server = http.createServer(app);
-  const dependencies = createDependencies(config);
+  const dependencies = createDependencies(config, mongoose.connection, logger);
+  let isReady = false;
   const { windowMs, apiMax, graphqlMax, authMax } = config.rateLimit;
   const apiRateLimiter = createRateLimiter(
     windowMs,
@@ -112,9 +146,10 @@ const startServer = async ({ env = process.env } = {}) => {
     'Too many authentication attempts. Please try again later.'
   );
 
+  app.disable('x-powered-by');
   app.set('trust proxy', 1);
+  app.use(createHttpLogger(logger));
   app.use(cors(createCorsOptions(config.corsOrigins)));
-  app.use(morgan(config.isProduction ? 'combined' : 'dev'));
   app.use(apiRateLimiter);
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
   app.use(compression());
@@ -129,79 +164,182 @@ const startServer = async ({ env = process.env } = {}) => {
     createImageUploadHandler(dependencies.services.imageUploads)
   );
 
-  app.get('/health', (_req, res) => {
-    res.status(200).json({ message: 'API is running' });
+  app.get('/health/live', (_req, res) => {
+    res.status(200).json({ status: 'alive' });
+  });
+  app.get(['/health', '/health/ready'], (_req, res) => {
+    const ready = isReady && mongoose.connection.readyState === 1;
+    res.status(ready ? 200 : 503).json({ status: ready ? 'ready' : 'not_ready' });
   });
 
-  await mongoose.connect(config.mongodbUri);
-  console.log('MongoDB connected successfully');
+  let apolloServer;
+  let io;
+  let shutdown;
 
-  const apolloServer = new ApolloServer({
-    typeDefs,
-    resolvers,
-    validationRules: createValidationRules(config.graphql),
-    formatError: formatGraphqlError
-  });
-  await apolloServer.start();
+  try {
+    await mongoose.connect(config.mongodbUri);
+    logger.info('MongoDB connected successfully');
 
-  app.use(
-    '/graphql',
-    (req, res, next) => (isAuthOperation(req) ? authRateLimiter(req, res, next) : next()),
-    graphqlRateLimiter,
-    expressMiddleware(apolloServer, {
-      context: async ({ req }) => ({
-        req,
-        services: dependencies.services,
-        loaders: createLoaders(dependencies.repositories)
+    apolloServer = new ApolloServer({
+      typeDefs,
+      resolvers,
+      validationRules: createValidationRules(config.graphql),
+      formatError: formatGraphqlError,
+      plugins: [createGraphqlErrorPlugin(errorMonitor)]
+    });
+    await apolloServer.start();
+
+    app.use(
+      '/graphql',
+      (req, res, next) => (isAuthOperation(req) ? authRateLimiter(req, res, next) : next()),
+      graphqlRateLimiter,
+      expressMiddleware(apolloServer, {
+        context: async ({ req }) => ({
+          req,
+          services: dependencies.services,
+          loaders: createLoaders(dependencies.repositories)
+        })
       })
-    })
-  );
+    );
 
-  app.use((_req, res) => {
-    res.status(404).json({ message: 'Route not found' });
-  });
-  app.use((error, _req, res, _next) => {
-    const status = error.code?.startsWith('LIMIT_') ? 413 : error.statusCode || error.status || 500;
-    if (status >= 500) {
-      console.error('Unhandled HTTP error:', error);
+    app.use((_req, res) => {
+      res.status(404).json({ message: 'Route not found' });
+    });
+    app.use((error, req, res, _next) => {
+      const status = error.code?.startsWith('LIMIT_')
+        ? 413
+        : error.statusCode || error.status || 500;
+      if (status >= 500) {
+        req.log.error({ err: error }, 'Unhandled HTTP error');
+        errorMonitor.capture(error, { requestId: req.id, userId: req.userId });
+      }
+      res.status(status).json({
+        message: status >= 500 ? 'Internal server error' : error.message,
+        data: status >= 500 ? null : error.data || null,
+        requestId: req.id
+      });
+    });
+
+    io = socket.init(server, {
+      allowedOrigins: config.corsOrigins,
+      jwtSecret: config.jwtSecret
+    });
+    io.on('connection', (client) => {
+      logger.info({ socketId: client.id, userId: client.data.userId }, 'Socket client connected');
+    });
+
+    shutdown = createShutdownController({
+      apolloServer,
+      errorMonitor,
+      io,
+      logger,
+      mongo: mongoose,
+      server,
+      setReady: (ready) => {
+        isReady = ready;
+      },
+      timeoutMs: config.shutdownTimeoutMs
+    });
+
+    await new Promise((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(config.port, () => {
+        server.off('error', reject);
+        resolve();
+      });
+    });
+    isReady = true;
+    logger.info(
+      { port: config.port, errorMonitoringEnabled: errorMonitor.enabled },
+      'Server started'
+    );
+
+    return { app, errorMonitor, io, logger, server, stop: shutdown.stop };
+  } catch (error) {
+    isReady = false;
+    logger.fatal({ err: error }, 'Server startup failed');
+    errorMonitor.capture(error, { phase: 'startup' });
+
+    if (shutdown) {
+      await shutdown.stop('startup-failure');
+    } else {
+      const cleanup = [];
+      if (io) {
+        cleanup.push(new Promise((resolve) => io.close(resolve)));
+      }
+      if (apolloServer) {
+        cleanup.push(apolloServer.stop());
+      }
+      if (mongoose.connection.readyState !== 0) {
+        cleanup.push(mongoose.disconnect());
+      }
+      await Promise.allSettled(cleanup);
+      await errorMonitor.flush(2000).catch(() => false);
     }
-    res.status(status).json({
-      message: status >= 500 ? 'Internal server error' : error.message,
-      data: status >= 500 ? null : error.data || null
-    });
-  });
 
-  const io = socket.init(server, {
-    allowedOrigins: config.corsOrigins,
-    jwtSecret: config.jwtSecret
-  });
-  io.on('connection', (client) => {
-    console.log(`Socket client connected: ${client.id}`);
-  });
-
-  await new Promise((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(config.port, () => {
-      server.off('error', reject);
-      resolve();
-    });
-  });
-  console.log(`Server is running on port ${config.port}`);
-
-  const stop = async () => {
-    await apolloServer.stop();
-    await new Promise((resolve) => io.close(resolve));
-    await mongoose.disconnect();
-  };
-
-  return { app, server, io, stop };
+    throw error;
+  }
 };
 
 if (require.main === module) {
-  startServer().catch((error) => {
-    console.error('Server startup failed:', error.message);
-    process.exitCode = 1;
-  });
+  const bootstrapLogger = createBootstrapLogger();
+  let runtime;
+  let shutdownRequested = false;
+  let pendingShutdown;
+
+  const finishShutdown = async ({ reason, exitCode, error }) => {
+    if (error) {
+      const normalizedError = normalizeError(error);
+      runtime.logger.fatal({ err: normalizedError, reason }, 'Fatal process error');
+      runtime.errorMonitor.capture(normalizedError, { phase: 'process', reason });
+    }
+
+    const result = await runtime.stop(reason);
+    process.exitCode = result.forced ? 1 : exitCode;
+
+    if (result.forced) {
+      process.exit(1);
+    }
+  };
+
+  const requestShutdown = async (reason, exitCode = 0, error) => {
+    if (shutdownRequested) {
+      bootstrapLogger.fatal({ reason }, 'Second shutdown request received; exiting immediately');
+      process.exit(1);
+    }
+    shutdownRequested = true;
+    pendingShutdown = { reason, exitCode, error };
+
+    if (error && !runtime) {
+      bootstrapLogger.fatal(
+        { err: normalizeError(error), reason },
+        'Fatal process error during startup'
+      );
+    }
+    if (runtime) {
+      await finishShutdown(pendingShutdown);
+    }
+  };
+
+  process.once('SIGINT', () => void requestShutdown('SIGINT'));
+  process.once('SIGTERM', () => void requestShutdown('SIGTERM'));
+  process.once('uncaughtException', (error) => void requestShutdown('uncaughtException', 1, error));
+  process.once(
+    'unhandledRejection',
+    (error) => void requestShutdown('unhandledRejection', 1, error)
+  );
+
+  startServer()
+    .then(async (startedRuntime) => {
+      runtime = startedRuntime;
+      if (pendingShutdown) {
+        await finishShutdown(pendingShutdown);
+      }
+    })
+    .catch((error) => {
+      bootstrapLogger.fatal({ err: error }, 'Server startup failed');
+      process.exitCode = 1;
+    });
 }
 
-module.exports = { startServer };
+module.exports = { createCorsOptions, formatGraphqlError, startServer };

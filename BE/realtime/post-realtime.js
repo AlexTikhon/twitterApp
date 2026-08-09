@@ -10,9 +10,10 @@ const serializePost = (post) => ({
 });
 
 class PostRealtime {
-  constructor({ postRepository, getIo }) {
+  constructor({ postRepository, getIo, logger }) {
     this.postRepository = postRepository;
     this.getIo = getIo;
+    this.logger = logger;
   }
 
   async emit(action, postId) {
@@ -28,7 +29,7 @@ class PostRealtime {
 
       this.getIo().emit('posts', { action, post });
     } catch (error) {
-      console.error(`Failed to emit post ${action} event:`, error);
+      this.logger?.error({ err: error, action, postId }, 'Failed to emit post event');
     }
   }
 }

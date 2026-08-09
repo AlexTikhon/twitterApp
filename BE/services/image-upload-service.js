@@ -2,10 +2,11 @@ const { createError } = require('../domain/errors');
 const { validateObjectId } = require('../domain/validation');
 
 class ImageUploadService {
-  constructor({ imageUploadRepository, imageStorage, uploadMaxAgeMs }) {
+  constructor({ imageUploadRepository, imageStorage, uploadMaxAgeMs, logger }) {
     this.imageUploadRepository = imageUploadRepository;
     this.imageStorage = imageStorage;
     this.uploadMaxAgeMs = uploadMaxAgeMs;
+    this.logger = logger;
   }
 
   async upload(userId, file) {
@@ -49,7 +50,10 @@ class ImageUploadService {
         await this.imageUploadRepository.deleteById(uploadId);
       }
     } catch (error) {
-      console.error('Failed to remove consumed image upload metadata:', error);
+      this.logger?.error(
+        { err: error, uploadId },
+        'Failed to remove consumed image upload metadata'
+      );
     }
   }
 

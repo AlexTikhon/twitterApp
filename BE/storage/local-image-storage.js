@@ -24,9 +24,10 @@ const hasExpectedSignature = (buffer, mimeType) => {
 const formatMegabytes = (bytes) => `${Math.floor(bytes / 1024 / 1024)}MB`;
 
 class LocalImageStorage {
-  constructor({ imagesDirectory, maxImageSizeBytes }) {
+  constructor({ imagesDirectory, maxImageSizeBytes }, logger) {
     this.imagesDirectory = path.resolve(imagesDirectory);
     this.maxImageSizeBytes = maxImageSizeBytes;
+    this.logger = logger;
   }
 
   resolve(publicPath) {
@@ -64,7 +65,7 @@ class LocalImageStorage {
   async delete(publicPath) {
     const absolutePath = this.resolve(publicPath);
     if (!absolutePath) {
-      console.warn('Skipped deletion of an invalid stored image path.');
+      this.logger?.warn({ publicPath }, 'Skipped deletion of an invalid stored image path');
       return false;
     }
 
@@ -73,7 +74,7 @@ class LocalImageStorage {
       return true;
     } catch (error) {
       if (error.code !== 'ENOENT') {
-        console.error('Failed to delete stored image:', error);
+        this.logger?.error({ err: error, publicPath }, 'Failed to delete stored image');
       }
 
       return error.code === 'ENOENT';

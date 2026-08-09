@@ -7,6 +7,7 @@ dotenv.config();
 const LOCAL_CORS_ORIGINS = ['http://localhost:3000', 'http://127.0.0.1:3000'];
 
 const configurationError = (message) => new Error(`Invalid environment configuration: ${message}`);
+const LOG_LEVELS = ['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'];
 
 const readRequiredString = (env, name) => {
   const value = typeof env[name] === 'string' ? env[name].trim() : '';
@@ -40,6 +41,21 @@ const readNodeEnvironment = (env) => {
   }
 
   return value;
+};
+
+const readLogLevel = (env) => {
+  const value = (env.LOG_LEVEL || 'info').trim().toLowerCase();
+
+  if (!LOG_LEVELS.includes(value)) {
+    throw configurationError(`LOG_LEVEL must be one of: ${LOG_LEVELS.join(', ')}.`);
+  }
+
+  return value;
+};
+
+const readOptionalString = (env, name) => {
+  const value = typeof env[name] === 'string' ? env[name].trim() : '';
+  return value || undefined;
 };
 
 const readCorsOrigins = (env, nodeEnvironment) => {
@@ -100,7 +116,9 @@ const loadConfig = (env = process.env) => {
   return Object.freeze({
     nodeEnvironment,
     isProduction: nodeEnvironment === 'production',
+    logLevel: readLogLevel(env),
     port: readPositiveInteger(env, 'PORT', 8080, 65535),
+    shutdownTimeoutMs: readPositiveInteger(env, 'SHUTDOWN_TIMEOUT_MS', 10_000, 120_000),
     mongodbUri,
     jwtSecret,
     jwtExpiresInSeconds: readPositiveInteger(env, 'JWT_EXPIRES_IN_SECONDS', 3600),
@@ -119,6 +137,11 @@ const loadConfig = (env = process.env) => {
     graphql: Object.freeze({
       maxDepth: readPositiveInteger(env, 'GRAPHQL_MAX_DEPTH', 8),
       maxComplexity: readPositiveInteger(env, 'GRAPHQL_MAX_COMPLEXITY', 200)
+    }),
+    sentry: Object.freeze({
+      dsn: readOptionalString(env, 'SENTRY_DSN'),
+      environment: readOptionalString(env, 'SENTRY_ENVIRONMENT') || nodeEnvironment,
+      release: readOptionalString(env, 'SENTRY_RELEASE')
     }),
     storage: Object.freeze({
       imagesDirectory: path.resolve(__dirname, '..', 'images'),

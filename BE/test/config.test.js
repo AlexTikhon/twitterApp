@@ -13,11 +13,15 @@ test('configuration parses bounded values into one validated object', () => {
   const config = loadConfig({
     ...validEnv,
     PORT: '9090',
+    LOG_LEVEL: 'debug',
+    SHUTDOWN_TIMEOUT_MS: '15000',
     POSTS_PAGE_SIZE_LIMIT: '50',
     CORS_ORIGINS: 'https://example.com/,https://admin.example.com'
   });
 
   assert.equal(config.port, 9090);
+  assert.equal(config.logLevel, 'debug');
+  assert.equal(config.shutdownTimeoutMs, 15000);
   assert.equal(config.posts.maxPageSize, 50);
   assert.equal(config.graphql.maxDepth, 8);
   assert.equal(config.graphql.maxComplexity, 200);
@@ -38,4 +42,15 @@ test('configuration requires explicit browser origins in production', () => {
 
 test('configuration rejects malformed optional numeric values', () => {
   assert.throws(() => loadConfig({ ...validEnv, PORT: 'not-a-port' }), /PORT must be an integer/);
+});
+
+test('configuration validates structured logging options', () => {
+  assert.throws(
+    () => loadConfig({ ...validEnv, LOG_LEVEL: 'verbose' }),
+    /LOG_LEVEL must be one of/
+  );
+  assert.throws(
+    () => loadConfig({ ...validEnv, SHUTDOWN_TIMEOUT_MS: '0' }),
+    /SHUTDOWN_TIMEOUT_MS must be an integer/
+  );
 });

@@ -15,20 +15,22 @@ const { PostService } = require('./services/post-service');
 const { ProfileService } = require('./services/profile-service');
 const { LocalImageStorage } = require('./storage/local-image-storage');
 
-const createDependencies = (config, connection = mongoose.connection) => {
+const createDependencies = (config, connection = mongoose.connection, logger) => {
   const postRepository = new PostRepository(Post);
   const userRepository = new UserRepository(User);
   const imageUploadRepository = new ImageUploadRepository(ImageUpload);
-  const imageStorage = new LocalImageStorage(config.storage);
+  const imageStorage = new LocalImageStorage(config.storage, logger);
   const postRealtime = new PostRealtime({
     postRepository,
-    getIo: socket.getIo
+    getIo: socket.getIo,
+    logger
   });
 
   const imageUploads = new ImageUploadService({
     imageUploadRepository,
     imageStorage,
-    uploadMaxAgeMs: config.storage.uploadMaxAgeMs
+    uploadMaxAgeMs: config.storage.uploadMaxAgeMs,
+    logger
   });
   const services = {
     auth: new AuthService({
