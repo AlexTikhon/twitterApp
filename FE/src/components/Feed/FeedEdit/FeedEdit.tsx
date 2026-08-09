@@ -7,11 +7,10 @@ import Input from '../../Form/Input/Input';
 import FilePicker from '../../Form/Input/FilePicker';
 import Image from '../../Image/Image';
 import { required, length } from '../../../util/validators';
-import { generateBase64FromImage } from '../../../util/image';
 
 export type PostEditorData = {
   title: string;
-  image: string;
+  image: File | null;
   content: string;
 };
 
@@ -31,7 +30,7 @@ type FeedEditProps = {
 };
 
 type Validator = (value: string) => boolean;
-type PostFormFieldId = keyof PostEditorData;
+type PostFormFieldId = 'title' | 'image' | 'content';
 
 type PostFormField = {
   value: string;
@@ -66,6 +65,7 @@ const POST_FORM: PostForm = {
 const FeedEdit = (props: FeedEditProps) => {
   const [postForm, setPostForm] = useState(POST_FORM);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
 
   const getFormIsValid = (updatedForm: PostForm) => {
     let nextFormIsValid = true;
@@ -82,7 +82,13 @@ const FeedEdit = (props: FeedEditProps) => {
     // Opening the modal for a new post resets the form to its empty state.
     if (props.editing && !props.selectedPost) {
       setPostForm(POST_FORM);
-      setImagePreview(null);
+      setImagePreview((previousPreview) => {
+        if (previousPreview?.startsWith('blob:')) {
+          URL.revokeObjectURL(previousPreview);
+        }
+        return null;
+      });
+      setSelectedImage(null);
       return;
     }
 
@@ -106,29 +112,43 @@ const FeedEdit = (props: FeedEditProps) => {
       };
       setPostForm(postForm);
       // Existing posts show the stored image immediately in the preview area.
-      setImagePreview(props.selectedPost.imageUrl || null);
+      setImagePreview((previousPreview) => {
+        if (previousPreview?.startsWith('blob:')) {
+          URL.revokeObjectURL(previousPreview);
+        }
+        return props.selectedPost?.imageUrl || null;
+      });
+      setSelectedImage(null);
     }
   }, [props.editing, props.selectedPost]);
 
-  // Updates field state and converts selected image files to base64 previews.
-  const postInputChangeHandler = async (
+  // Updates field state and creates a local preview without serializing the file into GraphQL.
+  const postInputChangeHandler = (
     input: PostFormFieldId,
     value: string,
     files?: FileList | null
   ) => {
     let updatedValue = value;
 
-    if (files && files.length > 0) {
-      try {
-        // Image files are converted to base64 because the project now uploads via GraphQL.
-        const b64 = await generateBase64FromImage(files[0]);
-        updatedValue = b64;
-        setImagePreview(b64);
-      } catch (err) {
-        console.log(err);
-        updatedValue = '';
-        setImagePreview(null);
-      }
+    if (input === 'image' && files && files.length > 0) {
+      const imageFile = files[0];
+      updatedValue = imageFile.name;
+      setSelectedImage(imageFile);
+      setImagePreview((previousPreview) => {
+        if (previousPreview?.startsWith('blob:')) {
+          URL.revokeObjectURL(previousPreview);
+        }
+        return URL.createObjectURL(imageFile);
+      });
+    } else if (input === 'image') {
+      updatedValue = '';
+      setSelectedImage(null);
+      setImagePreview((previousPreview) => {
+        if (previousPreview?.startsWith('blob:')) {
+          URL.revokeObjectURL(previousPreview);
+        }
+        return null;
+      });
     }
     setPostForm((prevPostForm) => {
       let isValid = true;
@@ -163,7 +183,13 @@ const FeedEdit = (props: FeedEditProps) => {
   // Resets editor state and informs the parent that editing was cancelled.
   const cancelPostChangeHandler = () => {
     setPostForm(POST_FORM);
-    setImagePreview(null);
+    setImagePreview((previousPreview) => {
+      if (previousPreview?.startsWith('blob:')) {
+        URL.revokeObjectURL(previousPreview);
+      }
+      return null;
+    });
+    setSelectedImage(null);
     props.onCancelEdit();
   };
 
@@ -171,12 +197,18 @@ const FeedEdit = (props: FeedEditProps) => {
   const acceptPostChangeHandler = () => {
     const post = {
       title: postForm.title.value,
-      image: postForm.image.value,
+      image: selectedImage,
       content: postForm.content.value
     };
     props.onFinishEdit(post);
     setPostForm(POST_FORM);
-    setImagePreview(null);
+    setImagePreview((previousPreview) => {
+      if (previousPreview?.startsWith('blob:')) {
+        URL.revokeObjectURL(previousPreview);
+      }
+      return null;
+    });
+    setSelectedImage(null);
   };
 
   // Renders the modal editor only while the parent marks it as open.

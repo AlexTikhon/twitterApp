@@ -11,7 +11,8 @@ export default [
       'coverage/**',
       'node_modules/**',
       'playwright-report/**',
-      'test-results/**'
+      'test-results/**',
+      'src/generated/**'
     ]
   },
   js.configs.recommended,

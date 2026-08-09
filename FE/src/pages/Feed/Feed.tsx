@@ -11,7 +11,15 @@ import Paginator from '../../components/Paginator/Paginator';
 import Loader from '../../components/Loader/Loader';
 import ErrorHandler from '../../components/ErrorHandler/ErrorHandler';
 import { API_URL } from '../../config';
+import type {
+  CreatePostMutation,
+  GetPostsQuery,
+  GetStatusQuery,
+  UpdatePostMutation,
+  UpdateStatusMutation
+} from '../../generated/graphql';
 import { graphqlRequest, isUnauthorizedError } from '../../util/graphql';
+import { uploadImage } from '../../util/upload';
 import './Feed.css';
 
 type FeedProps = {
@@ -20,23 +28,11 @@ type FeedProps = {
   onLogout: () => void;
 };
 
-type PostCreator = {
-  _id: string;
-  name: string;
-};
-
-type FeedPost = {
-  _id: string;
-  title: string;
-  content: string;
-  imageUrl: string;
-  createdAt: string;
-  creator: PostCreator;
-};
+type FeedPost = GetPostsQuery['posts']['posts'][number];
 
 type FeedState = {
   isEditing: boolean;
-  posts: FeedPost[];
+  posts: readonly FeedPost[];
   totalPosts: number;
   editPost: FeedPost | null;
   status: string;
@@ -48,32 +44,11 @@ type FeedState = {
 
 type LoadDirection = 'next' | 'previous';
 
-type StatusResponse = {
-  status: {
-    status: string;
-  };
-};
-
-type PostsResponse = {
-  posts: {
-    totalItems: number;
-    posts: FeedPost[];
-  };
-};
-
-type UpdateStatusResponse = {
-  updateStatus: {
-    status: string;
-  };
-};
-
-type CreatePostResponse = {
-  createPost: FeedPost;
-};
-
-type UpdatePostResponse = {
-  updatePost: FeedPost;
-};
+type StatusResponse = GetStatusQuery;
+type PostsResponse = GetPostsQuery;
+type UpdateStatusResponse = UpdateStatusMutation;
+type CreatePostResponse = CreatePostMutation;
+type UpdatePostResponse = UpdatePostMutation;
 
 type PostsSocketEvent =
   | { action: 'create'; post: FeedPost }
@@ -124,6 +99,10 @@ const Feed = (props: FeedProps) => {
             query GetPosts($page: Int!, $limit: Int!) {
               posts(page: $page, limit: $limit) {
                 totalItems
+                pageInfo {
+                  endCursor
+                  hasNextPage
+                }
                 posts {
                   _id
                   title
@@ -318,10 +297,6 @@ const Feed = (props: FeedProps) => {
     }));
   };
 
-  // Detects newly selected images that have already been converted to data URLs.
-  const isBase64Image = (image: string) =>
-    typeof image === 'string' && image.startsWith('data:image/');
-
   // Creates or updates a post using the current editor payload.
   const finishEditHandler = async (postData: PostEditorData) => {
     const activeEditPost = feedState.editPost;
@@ -332,14 +307,14 @@ const Feed = (props: FeedProps) => {
       editLoading: true
     }));
 
-    const postInput = {
-      title: postData.title,
-      content: postData.content,
-      // The backend retains the current stored image when no new file is sent.
-      image: isBase64Image(postData.image) ? postData.image : null
-    };
-
     try {
+      const imageUploadId = postData.image ? await uploadImage(postData.image, token) : null;
+      const postInput = {
+        title: postData.title,
+        content: postData.content,
+        imageUploadId
+      };
+
       const data = await graphqlRequest<CreatePostResponse | UpdatePostResponse>({
         query: activeEditPost
           ? `

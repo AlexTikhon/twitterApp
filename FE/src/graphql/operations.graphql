@@ -1,0 +1,92 @@
+mutation CreateUser($email: String!, $name: String!, $password: String!) {
+  createUser(userInput: { email: $email, name: $name, password: $password }) {
+    _id
+  }
+}
+
+mutation Login($email: String!, $password: String!) {
+  login(email: $email, password: $password) {
+    token
+    userId
+    expiresIn
+  }
+}
+
+query GetStatus {
+  status {
+    status
+  }
+}
+
+mutation UpdateStatus($status: String!) {
+  updateStatus(status: $status) {
+    status
+  }
+}
+
+query GetPosts($page: Int, $limit: Int, $first: Int, $after: String) {
+  posts(page: $page, limit: $limit, first: $first, after: $after) {
+    totalItems
+    pageInfo {
+      endCursor
+      hasNextPage
+    }
+    posts {
+      _id
+      title
+      content
+      imageUrl
+      createdAt
+      creator {
+        _id
+        name
+      }
+    }
+  }
+}
+
+query GetPost($id: ID!) {
+  post(id: $id) {
+    _id
+    title
+    content
+    imageUrl
+    createdAt
+    creator {
+      _id
+      name
+    }
+  }
+}
+
+mutation CreatePost($postInput: PostInputData!) {
+  createPost(postInput: $postInput) {
+    _id
+    title
+    content
+    imageUrl
+    createdAt
+    creator {
+      _id
+      name
+    }
+  }
+}
+
+mutation UpdatePost($id: ID!, $postInput: PostInputData!) {
+  updatePost(id: $id, postInput: $postInput) {
+    _id
+    title
+    content
+    imageUrl
+    createdAt
+    creator {
+      _id
+      name
+    }
+  }
+}
+
+mutation DeletePost($id: ID!) {
+  deletePost(id: $id)
+}

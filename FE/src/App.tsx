@@ -12,6 +12,7 @@ import FeedPage from './pages/Feed/Feed';
 import SinglePostPage from './pages/Feed/SinglePost/SinglePost';
 import LoginPage from './pages/Auth/Login';
 import SignupPage from './pages/Auth/Signup';
+import type { LoginMutation } from './generated/graphql';
 import { graphqlRequest } from './util/graphql';
 import './App.css';
 
@@ -19,14 +20,6 @@ type AuthData = {
   email: string;
   password: string;
   name?: string;
-};
-
-type LoginResponse = {
-  login: {
-    token: string;
-    userId: string;
-    expiresIn: number;
-  };
 };
 
 const App = () => {
@@ -110,7 +103,7 @@ const App = () => {
     event.preventDefault();
     setAuthLoading(true);
     try {
-      const data = await graphqlRequest<LoginResponse>({
+      const data = await graphqlRequest<LoginMutation>({
         query: `
 					mutation Login($email: String!, $password: String!) {
 						login(email: $email, password: $password) {

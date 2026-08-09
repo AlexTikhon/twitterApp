@@ -46,6 +46,8 @@ jobs:
           cache: npm
           cache-dependency-path: FE/package-lock.json
       - run: npm ci
+      - run: npm run codegen
+      - run: git diff --exit-code -- src/generated/graphql.ts
       - run: npm run lint
       - run: npm run format:check
       - run: npm test

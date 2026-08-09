@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
 import Image from '../../../components/Image/Image';
+import type { GetPostQuery } from '../../../generated/graphql';
 import { graphqlRequest, isUnauthorizedError } from '../../../util/graphql';
 import './SinglePost.css';
 
@@ -18,18 +19,6 @@ type LoadedPost = {
   date: string;
   image: string;
   content: string;
-};
-
-type PostResponse = {
-  post: {
-    title: string;
-    content: string;
-    imageUrl: string;
-    createdAt: string;
-    creator: {
-      name: string;
-    };
-  };
 };
 
 const SinglePost = (props: SinglePostProps) => {
@@ -50,7 +39,7 @@ const SinglePost = (props: SinglePostProps) => {
     }
 
     try {
-      const data = await graphqlRequest<PostResponse>({
+      const data = await graphqlRequest<GetPostQuery>({
         query: `
           query GetPost($id: ID!) {
             post(id: $id) {
