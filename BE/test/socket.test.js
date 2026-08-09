@@ -17,11 +17,13 @@ const waitFor = (client, event) =>
   });
 
 test('Socket.IO rejects anonymous clients and accepts a valid JWT', async () => {
-  const previousSecret = process.env.JWT_SECRET;
-  process.env.JWT_SECRET = 'isolated-socket-test-secret-with-sufficient-length';
+  const jwtSecret = 'isolated-socket-test-secret-with-sufficient-length';
 
   const server = http.createServer();
-  const io = realtime.init(server, ['http://localhost']);
+  const io = realtime.init(server, {
+    allowedOrigins: ['http://localhost'],
+    jwtSecret
+  });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
 
   try {
@@ -37,7 +39,7 @@ test('Socket.IO rejects anonymous clients and accepts a valid JWT', async () => 
 
     assert.equal(authError.message, 'Not authenticated.');
 
-    const token = jwt.sign({ userId: '507f1f77bcf86cd799439011' }, process.env.JWT_SECRET, {
+    const token = jwt.sign({ userId: '507f1f77bcf86cd799439011' }, jwtSecret, {
       expiresIn: '1m'
     });
     const authenticated = createClient(url, {
@@ -51,11 +53,5 @@ test('Socket.IO rejects anonymous clients and accepts a valid JWT', async () => 
     authenticated.close();
   } finally {
     await io.close();
-
-    if (previousSecret === undefined) {
-      delete process.env.JWT_SECRET;
-    } else {
-      process.env.JWT_SECRET = previousSecret;
-    }
   }
 });

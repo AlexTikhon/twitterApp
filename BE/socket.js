@@ -5,7 +5,7 @@ const jwt = require('jsonwebtoken');
 let io;
 
 // Creates and stores the shared Socket.IO server instance.
-exports.init = (server, allowedOrigins) => {
+exports.init = (server, { allowedOrigins, jwtSecret }) => {
   io = socketIo(server, {
     cors: {
       origin: allowedOrigins,
@@ -28,7 +28,7 @@ exports.init = (server, allowedOrigins) => {
     }
 
     try {
-      const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+      const decodedToken = jwt.verify(token, jwtSecret);
 
       if (!decodedToken.userId) {
         return next(new Error('Not authenticated.'));

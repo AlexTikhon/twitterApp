@@ -26,13 +26,7 @@ const userSchema = new Schema(
       type: String,
       default: 'New mini-twitter user',
       maxlength: 160
-    },
-    posts: [
-      {
-        type: Schema.Types.ObjectId,
-        ref: 'Post'
-      }
-    ]
+    }
   },
   {
     timestamps: true

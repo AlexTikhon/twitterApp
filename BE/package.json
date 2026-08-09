@@ -7,6 +7,7 @@
     "start": "node app.js",
     "dev": "nodemon app.js",
     "start:e2e": "node scripts/start-e2e-server.js",
+    "migrate:remove-user-posts": "node scripts/remove-user-posts.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier . \"../.github/**/*.yml\" \"../*.{json,yml}\" --write --ignore-path ../.prettierignore",
@@ -28,6 +29,7 @@
     "bcryptjs": "^2.4.3",
     "compression": "^1.8.1",
     "cors": "^2.8.5",
+    "dataloader": "^2.2.3",
     "dotenv": "^16.4.5",
     "express": "^4.21.2",
     "express-rate-limit": "^8.5.2",
@@ -36,6 +38,7 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.12.1",
     "morgan": "^1.10.0",
+    "multer": "^2.2.0",
     "socket.io": "^4.8.1"
   },
   "devDependencies": {

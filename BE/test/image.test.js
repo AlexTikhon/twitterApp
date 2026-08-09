@@ -1,42 +1,51 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
+const os = require('node:os');
 const path = require('node:path');
-const { test } = require('node:test');
+const { after, before, test } = require('node:test');
 
-const clearImage = require('../util/file');
-const saveImage = require('../util/image');
+const { LocalImageStorage } = require('../storage/local-image-storage');
 
-const validPng =
-  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+const validPng = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+  'base64'
+);
 
-test('saveImage validates signatures and stores managed PNG files', async (t) => {
-  const publicPath = await saveImage(validPng);
-  const absolutePath = path.resolve(__dirname, '..', publicPath.replace(/^\/+/, ''));
+let imagesDirectory;
+let storage;
 
-  t.after(() => clearImage(publicPath));
+before(async () => {
+  imagesDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'twitter-image-test-'));
+  storage = new LocalImageStorage({
+    imagesDirectory,
+    maxImageSizeBytes: 5 * 1024 * 1024
+  });
+});
+
+after(async () => {
+  await fs.rm(imagesDirectory, { force: true, recursive: true });
+});
+
+test('image storage validates signatures and stores managed PNG files', async () => {
+  const publicPath = await storage.saveBuffer(validPng, 'image/png');
+  const absolutePath = path.join(imagesDirectory, path.basename(publicPath));
 
   assert.match(publicPath, /^\/images\/[a-zA-Z0-9.-]+\.png$/);
   assert.equal((await fs.stat(absolutePath)).isFile(), true);
+  assert.equal(await storage.delete(publicPath), true);
 });
 
-test('saveImage rejects content that does not match its declared type', async () => {
+test('image storage rejects content that does not match its declared type', async () => {
   await assert.rejects(
-    saveImage('data:image/png;base64,aGVsbG8='),
+    storage.saveBuffer(Buffer.from('hello'), 'image/png'),
     (error) => error.statusCode === 422
   );
 });
 
-test('saveImage enforces the configured decoded size limit', async () => {
-  const previousLimit = process.env.IMAGE_FILE_SIZE_LIMIT_BYTES;
-  process.env.IMAGE_FILE_SIZE_LIMIT_BYTES = '4';
-
-  try {
-    await assert.rejects(saveImage(validPng), (error) => error.statusCode === 413);
-  } finally {
-    if (previousLimit === undefined) {
-      delete process.env.IMAGE_FILE_SIZE_LIMIT_BYTES;
-    } else {
-      process.env.IMAGE_FILE_SIZE_LIMIT_BYTES = previousLimit;
-    }
-  }
+test('image storage enforces its configured decoded size limit', async () => {
+  const limitedStorage = new LocalImageStorage({ imagesDirectory, maxImageSizeBytes: 4 });
+  await assert.rejects(
+    limitedStorage.saveBuffer(validPng, 'image/png'),
+    (error) => error.statusCode === 413
+  );
 });

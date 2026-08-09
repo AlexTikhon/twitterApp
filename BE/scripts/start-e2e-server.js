@@ -1,9 +1,11 @@
-const { MongoMemoryServer } = require('mongodb-memory-server');
-const mongoose = require('mongoose');
+const { MongoMemoryReplSet } = require('mongodb-memory-server');
+
+const { startServer } = require('../app');
 
 const E2E_JWT_SECRET = 'browser-e2e-test-secret-with-sufficient-length';
 
 let mongoServer;
+let runtime;
 let stopping = false;
 
 const stop = async (exitCode = 0) => {
@@ -12,7 +14,9 @@ const stop = async (exitCode = 0) => {
   }
 
   stopping = true;
-  await mongoose.disconnect().catch(() => {});
+  if (runtime) {
+    await runtime.stop().catch(() => {});
+  }
 
   if (mongoServer) {
     await mongoServer.stop().catch(() => {});
@@ -22,14 +26,16 @@ const stop = async (exitCode = 0) => {
 };
 
 const start = async () => {
-  mongoServer = await MongoMemoryServer.create();
+  mongoServer = await MongoMemoryReplSet.create({
+    replSet: { count: 1, storageEngine: 'wiredTiger' }
+  });
   process.env.MONGODB_URI = mongoServer.getUri();
   process.env.JWT_SECRET = E2E_JWT_SECRET;
-  process.env.PORT = process.env.PORT || '8080';
-  process.env.CORS_ORIGINS = process.env.CORS_ORIGINS || 'http://127.0.0.1:3000';
+  process.env.PORT = '8080';
+  process.env.CORS_ORIGINS = 'http://127.0.0.1:3000';
   process.env.NODE_ENV = 'test';
 
-  require('../app');
+  runtime = await startServer();
 };
 
 process.once('SIGINT', () => void stop());
