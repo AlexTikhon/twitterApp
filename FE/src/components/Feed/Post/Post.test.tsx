@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import Post from './Post';
 
-const renderPost = (canModify: boolean) =>
+const renderPost = (canModify: boolean, deleting = false) =>
   render(
     <MemoryRouter>
       <Post
@@ -13,6 +13,7 @@ const renderPost = (canModify: boolean) =>
         date="August 9"
         title="Architecture"
         canModify={canModify}
+        deleting={deleting}
         onStartEdit={vi.fn()}
         onDelete={vi.fn()}
       />
@@ -33,5 +34,12 @@ describe('Post permissions', () => {
 
     expect(screen.getByRole('button', { name: 'Edit' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Delete' })).toBeEnabled();
+  });
+
+  it('disables mutation actions while this post is being deleted', () => {
+    renderPost(true, true);
+
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Loading...' })).toBeDisabled();
   });
 });

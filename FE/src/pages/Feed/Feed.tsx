@@ -37,6 +37,7 @@ type FeedState = {
   hasNextPage: boolean;
   postsLoading: boolean;
   editLoading: boolean;
+  deletingPostId: string | null;
   error: Error | null;
 };
 
@@ -56,6 +57,7 @@ const Feed = (props: FeedProps) => {
     hasNextPage: false,
     postsLoading: true,
     editLoading: false,
+    deletingPostId: null,
     error: null
   });
 
@@ -210,24 +212,24 @@ const Feed = (props: FeedProps) => {
     });
   }, []);
 
-  // Removes a post from local state and adjusts the total count.
+  // Removes a post once and clears its pending deletion state.
   const removePost = useCallback((postId: string) => {
     setFeedState((prevState) => {
       if (deletedPostIds.current.has(postId)) {
-        return { ...prevState, postsLoading: false };
+        return { ...prevState, deletingPostId: null };
       }
 
       deletedPostIds.current.add(postId);
       const postExists = prevState.posts.some((post) => post._id === postId);
 
       if (!postExists) {
-        return { ...prevState, postsLoading: false };
+        return { ...prevState, deletingPostId: null };
       }
 
       return {
         ...prevState,
         posts: prevState.posts.filter((post) => post._id !== postId),
-        postsLoading: false
+        deletingPostId: null
       };
     });
   }, []);
@@ -357,7 +359,11 @@ const Feed = (props: FeedProps) => {
 
   // Deletes a post through GraphQL and removes it from local state.
   const deletePostHandler = async (postId: string) => {
-    setFeedState((prevState) => ({ ...prevState, postsLoading: true }));
+    if (feedState.deletingPostId) {
+      return;
+    }
+
+    setFeedState((prevState) => ({ ...prevState, deletingPostId: postId }));
     try {
       await graphqlRequest({
         document: DeletePostDocument,
@@ -373,7 +379,11 @@ const Feed = (props: FeedProps) => {
         return;
       }
 
-      setFeedState((prevState) => ({ ...prevState, postsLoading: false }));
+      setFeedState((prevState) => ({
+        ...prevState,
+        deletingPostId: null,
+        error: normalizeError(err, 'Could not delete post.')
+      }));
     }
   };
 
@@ -432,6 +442,7 @@ const Feed = (props: FeedProps) => {
           userId={userId}
           hasPreviousPage={feedState.cursorHistory.length > 1}
           hasNextPage={feedState.hasNextPage}
+          deletingPostId={feedState.deletingPostId}
           onPreviousPage={() => void loadPreviousPage()}
           onNextPage={() => void loadNextPage()}
           onEdit={startEditPostHandler}

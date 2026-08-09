@@ -9,6 +9,7 @@ type FeedListProps = {
   userId: string | null | undefined;
   hasPreviousPage: boolean;
   hasNextPage: boolean;
+  deletingPostId: string | null;
   onPreviousPage: () => void;
   onNextPage: () => void;
   onEdit: (postId: string) => void;
@@ -21,6 +22,7 @@ const FeedList = ({
   userId,
   hasPreviousPage,
   hasNextPage,
+  deletingPostId,
   onPreviousPage,
   onNextPage,
   onEdit,
@@ -55,6 +57,7 @@ const FeedList = ({
           image={post.imageUrl}
           content={post.content}
           canModify={post.creator._id === userId}
+          deleting={deletingPostId === post._id}
           onStartEdit={() => onEdit(post._id)}
           onDelete={() => onDelete(post._id)}
         />

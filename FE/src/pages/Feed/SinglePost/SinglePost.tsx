@@ -1,8 +1,9 @@
 // Loads a single post view from GraphQL using the route post id.
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
 import Image from '../../../components/Image/Image';
+import Loader from '../../../components/Loader/Loader';
 import { GetPostDocument } from '../../../generated/graphql';
 import { graphqlRequest, isUnauthorizedError } from '../../../util/graphql';
 import './SinglePost.css';
@@ -22,46 +23,91 @@ type LoadedPost = {
 const SinglePost = (props: SinglePostProps) => {
   const { onLogout } = props;
   const { postId } = useParams();
-  const [post, setPost] = useState<LoadedPost>({
-    title: '',
-    author: '',
-    date: '',
-    image: '',
-    content: ''
-  });
+  const [post, setPost] = useState<LoadedPost | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
 
-  // Loads one post by id and maps the GraphQL response into display state.
-  const loadPost = useCallback(async () => {
+  // Fetches the post details whenever the route id changes.
+  useEffect(() => {
+    let active = true;
+
     if (!postId) {
-      return;
+      setLoading(false);
+      return () => {
+        active = false;
+      };
     }
 
-    try {
-      const data = await graphqlRequest({
-        document: GetPostDocument,
-        variables: {
-          id: postId
+    setPost(null);
+    setError(null);
+    setLoading(true);
+
+    const loadPost = async () => {
+      try {
+        const data = await graphqlRequest({
+          document: GetPostDocument,
+          variables: {
+            id: postId
+          }
+        });
+        if (!active) {
+          return;
         }
-      });
-      setPost({
-        title: data.post.title,
-        author: data.post.creator.name,
-        date: new Date(data.post.createdAt).toLocaleDateString('en-US'),
-        image: data.post.imageUrl,
-        content: data.post.content
-      });
-    } catch (err) {
-      console.log(err);
-      if (isUnauthorizedError(err)) {
-        onLogout();
+
+        setPost({
+          title: data.post.title,
+          author: data.post.creator.name,
+          date: new Date(data.post.createdAt).toLocaleDateString('en-US'),
+          image: data.post.imageUrl,
+          content: data.post.content
+        });
+        setLoading(false);
+      } catch (err) {
+        if (!active) {
+          return;
+        }
+        if (isUnauthorizedError(err)) {
+          onLogout();
+          return;
+        }
+
+        setError(err instanceof Error ? err : new Error('Could not load post.'));
+        setLoading(false);
       }
-    }
+    };
+
+    void loadPost();
+
+    return () => {
+      active = false;
+    };
   }, [onLogout, postId]);
 
-  // Fetches the post details once the route parameter is available.
-  useEffect(() => {
-    loadPost();
-  }, [loadPost]);
+  if (loading) {
+    return (
+      <section className="single-post single-post__state" role="status">
+        <Loader />
+        <p>Loading post...</p>
+      </section>
+    );
+  }
+
+  if (error) {
+    return (
+      <section className="single-post single-post__state" role="alert">
+        <h1>Could not load post</h1>
+        <p>{error.message}</p>
+      </section>
+    );
+  }
+
+  if (!post) {
+    return (
+      <section className="single-post single-post__state">
+        <h1>Post not found.</h1>
+      </section>
+    );
+  }
 
   // Renders the loaded post details.
   return (

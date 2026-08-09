@@ -18,6 +18,14 @@
   margin: 1rem auto;
 }
 
+.single-post__state {
+  margin-top: 3rem;
+}
+
+.single-post__state .loader {
+  margin: 0 auto 1rem;
+}
+
 @media (min-width: 768px) {
   .single-post {
     width: 40rem;

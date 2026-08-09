@@ -12,6 +12,7 @@ type PostProps = {
   image?: string;
   content?: string;
   canModify: boolean;
+  deleting?: boolean;
   onStartEdit: () => void;
   onDelete: () => void;
 };
@@ -30,12 +31,12 @@ const post = (props: PostProps) => (
         View
       </Button>
       {props.canModify && (
-        <Button mode="flat" onClick={props.onStartEdit}>
+        <Button mode="flat" onClick={props.onStartEdit} disabled={props.deleting}>
           Edit
         </Button>
       )}
       {props.canModify && (
-        <Button mode="flat" design="danger" onClick={props.onDelete}>
+        <Button mode="flat" design="danger" onClick={props.onDelete} loading={props.deleting}>
           Delete
         </Button>
       )}
