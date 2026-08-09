@@ -11,10 +11,7 @@ const socket = require('../socket');
 
 const DEFAULT_POSTS_PAGE_SIZE = 2;
 const DEFAULT_MAX_POSTS_PAGE_SIZE = 20;
-const DUMMY_PASSWORD_HASH = bcrypt.hash(
-  'constant-time-login-comparison-only',
-  12
-);
+const DUMMY_PASSWORD_HASH = bcrypt.hash('constant-time-login-comparison-only', 12);
 
 // Creates an error object carrying HTTP-like metadata for Apollo formatting.
 const createError = (message, statusCode, data = null) => {
@@ -25,19 +22,14 @@ const createError = (message, statusCode, data = null) => {
 };
 
 // Serializes MongoDB dates into ISO strings for GraphQL responses.
-const formatDate = date => new Date(date).toISOString();
+const formatDate = (date) => new Date(date).toISOString();
 
 // Trims strings safely while converting non-strings to an empty value.
-const normalizeString = value =>
-  typeof value === 'string' ? value.trim() : '';
+const normalizeString = (value) => (typeof value === 'string' ? value.trim() : '');
 
 // Rejects malformed MongoDB ids before they reach Mongoose queries.
 const validateObjectId = (id, field = 'id') => {
-  if (
-    typeof id !== 'string' ||
-    !/^[0-9a-fA-F]{24}$/.test(id) ||
-    !Types.ObjectId.isValid(id)
-  ) {
+  if (typeof id !== 'string' || !/^[0-9a-fA-F]{24}$/.test(id) || !Types.ObjectId.isValid(id)) {
     throw createError(`Invalid ${field}.`, 400);
   }
 };
@@ -53,10 +45,7 @@ const getPositiveIntegerEnv = (name, fallback) => {
 const getBoundedPagination = (page, limit) => {
   const currentPage = Math.max(Number(page) || 1, 1);
   const requestedLimit = Math.max(Number(limit) || DEFAULT_POSTS_PAGE_SIZE, 1);
-  const maxLimit = getPositiveIntegerEnv(
-    'POSTS_PAGE_SIZE_LIMIT',
-    DEFAULT_MAX_POSTS_PAGE_SIZE
-  );
+  const maxLimit = getPositiveIntegerEnv('POSTS_PAGE_SIZE_LIMIT', DEFAULT_MAX_POSTS_PAGE_SIZE);
 
   return {
     currentPage,
@@ -65,11 +54,10 @@ const getBoundedPagination = (page, limit) => {
 };
 
 // Checks whether a normalized email has a basic valid email shape.
-const validateEmail = email =>
-  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeString(email));
+const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeString(email));
 
 // Queries and mutations that need the current user fail fast here.
-const ensureAuth = req => {
+const ensureAuth = (req) => {
   if (!req.isAuth) {
     throw createError('Not authenticated.', 401);
   }
@@ -78,10 +66,9 @@ const ensureAuth = req => {
 };
 
 // Validates and normalizes signup input before creating a user.
-const validateUserInput = userInput => {
+const validateUserInput = (userInput) => {
   const email = normalizeString(userInput.email).toLowerCase();
-  const password =
-    typeof userInput.password === 'string' ? userInput.password : '';
+  const password = typeof userInput.password === 'string' ? userInput.password : '';
   const name = normalizeString(userInput.name);
   const errors = [];
 
@@ -116,11 +103,10 @@ const validateUserInput = userInput => {
 };
 
 // Validates and normalizes post form input before persistence.
-const validatePostInput = postInput => {
+const validatePostInput = (postInput) => {
   const title = normalizeString(postInput.title);
   const content = normalizeString(postInput.content);
-  const image =
-    typeof postInput.image === 'string' ? postInput.image : '';
+  const image = typeof postInput.image === 'string' ? postInput.image : '';
   const errors = [];
 
   if (title.length < 5) {
@@ -163,7 +149,7 @@ const validatePostInput = postInput => {
 };
 
 // Extracts a user id from populated, unpopulated, or string creator values.
-const getCreatorId = creator => {
+const getCreatorId = (creator) => {
   if (!creator) {
     return '';
   }
@@ -180,7 +166,7 @@ const getCreatorId = creator => {
 };
 
 // Mongoose documents are converted into plain GraphQL-friendly objects here.
-const transformPost = post => ({
+const transformPost = (post) => ({
   ...post._doc,
   _id: post._id.toString(),
   createdAt: formatDate(post.createdAt),
@@ -189,7 +175,7 @@ const transformPost = post => ({
 });
 
 // Converts a Mongoose user document into the GraphQL user response shape.
-const transformUser = userDoc => ({
+const transformUser = (userDoc) => ({
   ...userDoc._doc,
   _id: userDoc._id.toString(),
   password: null,
@@ -199,7 +185,7 @@ const transformUser = userDoc => ({
 });
 
 // Loads a user for nested GraphQL creator/post fields.
-const user = async userId => {
+const user = async (userId) => {
   const foundUser = await User.findById(userId);
 
   if (!foundUser) {
@@ -210,7 +196,7 @@ const user = async userId => {
 };
 
 // Loads posts for nested GraphQL user.posts fields.
-const posts = async postIds => {
+const posts = async (postIds) => {
   const foundPosts = await Post.find({ _id: { $in: postIds } });
 
   return foundPosts.map(transformPost);
@@ -218,7 +204,7 @@ const posts = async postIds => {
 
 // Socket payloads are resolved with a populated creator so the client can
 // update the feed immediately without issuing another query.
-const getSocketPostPayload = async postId => {
+const getSocketPostPayload = async (postId) => {
   const populatedPost = await Post.findById(postId).populate('creator', 'name');
 
   if (!populatedPost) {
@@ -241,9 +227,7 @@ const getSocketPostPayload = async postId => {
 const emitPostEvent = async (action, postId) => {
   try {
     const post =
-      action === 'delete'
-        ? { _id: postId.toString() }
-        : await getSocketPostPayload(postId);
+      action === 'delete' ? { _id: postId.toString() } : await getSocketPostPayload(postId);
 
     socket.getIo().emit('posts', { action, post });
   } catch (error) {
@@ -395,7 +379,7 @@ const rootResolvers = {
       }
     } catch (error) {
       if (createdPost) {
-        await Post.findByIdAndDelete(createdPost._id).catch(cleanupError => {
+        await Post.findByIdAndDelete(createdPost._id).catch((cleanupError) => {
           console.error('Failed to roll back post creation:', cleanupError);
         });
       }
@@ -475,7 +459,7 @@ const rootResolvers = {
       });
     } catch (error) {
       // Restore the post if the denormalized user relation could not be updated.
-      await Post.create(post.toObject()).catch(rollbackError => {
+      await Post.create(post.toObject()).catch((rollbackError) => {
         console.error('Failed to roll back post deletion:', rollbackError);
       });
       throw error;
@@ -515,8 +499,7 @@ const rootResolvers = {
 };
 
 // Adapts the old root resolver signature to Apollo's resolver map signature.
-const withRequest = resolver => (parent, args, context) =>
-  resolver(args, context.req);
+const withRequest = (resolver) => (_parent, args, context) => resolver(args, context.req);
 
 module.exports = {
   RootQuery: {

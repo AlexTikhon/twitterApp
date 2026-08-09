@@ -55,11 +55,11 @@ const INITIAL_SIGNUP_FORM: SignupForm = {
 
 const Signup = (props: SignupProps) => {
   const [signupForm, setSignupForm] = useState(INITIAL_SIGNUP_FORM);
-  const formIsValid = Object.values(signupForm).every(field => field.valid);
+  const formIsValid = Object.values(signupForm).every((field) => field.valid);
 
   // Updates one signup field and recalculates the form validity.
   const inputChangeHandler = (input: SignupFieldId, value: string) => {
-    setSignupForm(prevSignupForm => {
+    setSignupForm((prevSignupForm) => {
       let isValid = true;
       for (const validator of prevSignupForm[input].validators) {
         isValid = isValid && validator(value);
@@ -78,7 +78,7 @@ const Signup = (props: SignupProps) => {
 
   // Marks one signup field as touched after it loses focus.
   const inputBlurHandler = (input: SignupFieldId) => {
-    setSignupForm(prevSignupForm => {
+    setSignupForm((prevSignupForm) => {
       return {
         ...prevSignupForm,
         [input]: {
@@ -93,7 +93,7 @@ const Signup = (props: SignupProps) => {
   return (
     <Auth>
       <form
-        onSubmit={e =>
+        onSubmit={(e) =>
           props.onSignup(e, {
             email: signupForm.email.value,
             name: signupForm.name.value,
@@ -134,12 +134,7 @@ const Signup = (props: SignupProps) => {
           valid={signupForm['password'].valid}
           touched={signupForm['password'].touched}
         />
-        <Button
-          design="raised"
-          type="submit"
-          loading={props.loading}
-          disabled={!formIsValid}
-        >
+        <Button design="raised" type="submit" loading={props.loading} disabled={!formIsValid}>
           Signup
         </Button>
       </form>

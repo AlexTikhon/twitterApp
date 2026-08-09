@@ -48,11 +48,11 @@ const INITIAL_LOGIN_FORM: LoginForm = {
 
 const Login = (props: LoginProps) => {
   const [loginForm, setLoginForm] = useState(INITIAL_LOGIN_FORM);
-  const formIsValid = Object.values(loginForm).every(field => field.valid);
+  const formIsValid = Object.values(loginForm).every((field) => field.valid);
 
   // Updates one login field and recalculates the form validity.
   const inputChangeHandler = (input: LoginFieldId, value: string) => {
-    setLoginForm(prevLoginForm => {
+    setLoginForm((prevLoginForm) => {
       let isValid = true;
       for (const validator of prevLoginForm[input].validators) {
         isValid = isValid && validator(value);
@@ -71,7 +71,7 @@ const Login = (props: LoginProps) => {
 
   // Marks one login field as touched after it loses focus.
   const inputBlurHandler = (input: LoginFieldId) => {
-    setLoginForm(prevLoginForm => {
+    setLoginForm((prevLoginForm) => {
       return {
         ...prevLoginForm,
         [input]: {
@@ -86,7 +86,7 @@ const Login = (props: LoginProps) => {
   return (
     <Auth>
       <form
-        onSubmit={e =>
+        onSubmit={(e) =>
           props.onLogin(e, {
             email: loginForm.email.value,
             password: loginForm.password.value
@@ -115,12 +115,7 @@ const Login = (props: LoginProps) => {
           valid={loginForm['password'].valid}
           touched={loginForm['password'].touched}
         />
-        <Button
-          design="raised"
-          type="submit"
-          loading={props.loading}
-          disabled={!formIsValid}
-        >
+        <Button design="raised" type="submit" loading={props.loading} disabled={!formIsValid}>
           Login
         </Button>
       </form>

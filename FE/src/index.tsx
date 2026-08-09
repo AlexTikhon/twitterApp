@@ -8,11 +8,11 @@ import App from './App';
 const rootElement = document.getElementById('root');
 
 if (!rootElement) {
-	throw new Error('Root element not found.');
+  throw new Error('Root element not found.');
 }
 
 createRoot(rootElement).render(
-	<BrowserRouter>
-		<App />
-	</BrowserRouter>
+  <BrowserRouter>
+    <App />
+  </BrowserRouter>
 );

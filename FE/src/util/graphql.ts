@@ -15,11 +15,7 @@ export type GraphqlRequestError = Error & {
 };
 
 export const isUnauthorizedError = (error: unknown) =>
-  Boolean(
-    error &&
-      typeof error === 'object' &&
-      (error as GraphqlRequestError).statusCode === 401
-  );
+  Boolean(error && typeof error === 'object' && (error as GraphqlRequestError).statusCode === 401);
 
 // Creates an Apollo client for one request with optional bearer auth headers.
 const createClient = (token?: string | null) => {

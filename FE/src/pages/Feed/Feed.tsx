@@ -1,5 +1,5 @@
 // Owns the timeline UI, GraphQL feed operations, and realtime socket updates.
-import React, { Fragment, useEffect, useRef, useState } from 'react';
+import React, { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import openSocket, { Socket } from 'socket.io-client';
 
 import Post from '../../components/Feed/Post/Post';
@@ -84,6 +84,7 @@ const normalizeError = (error: unknown, fallbackMessage: string): Error =>
   error instanceof Error ? error : new Error(fallbackMessage);
 
 const Feed = (props: FeedProps) => {
+  const { token, userId, onLogout } = props;
   const socket = useRef<Socket | null>(null);
   const deletedPostIds = useRef(new Set<string>());
   const [feedState, setFeedState] = useState<FeedState>({
@@ -98,8 +99,65 @@ const Feed = (props: FeedProps) => {
     error: null
   });
 
+  // Stores a caught request error so the shared error modal can show it.
+  const catchError = useCallback(
+    (error: unknown) => {
+      if (isUnauthorizedError(error)) {
+        onLogout();
+        return;
+      }
+
+      setFeedState((prevState) => ({
+        ...prevState,
+        error: normalizeError(error, 'Feed request failed.')
+      }));
+    },
+    [onLogout]
+  );
+
+  // Fetches one explicit page so initial loading does not depend on stale state.
+  const fetchPosts = useCallback(
+    async (page: number) => {
+      try {
+        const data = await graphqlRequest<PostsResponse>({
+          query: `
+            query GetPosts($page: Int!, $limit: Int!) {
+              posts(page: $page, limit: $limit) {
+                totalItems
+                posts {
+                  _id
+                  title
+                  content
+                  imageUrl
+                  createdAt
+                  creator {
+                    _id
+                    name
+                  }
+                }
+              }
+            }
+          `,
+          variables: { page, limit: 2 },
+          token
+        });
+
+        setFeedState((prevState) => ({
+          ...prevState,
+          posts: data.posts.posts,
+          totalPosts: data.posts.totalItems,
+          postPage: page,
+          postsLoading: false
+        }));
+      } catch (error) {
+        catchError(error);
+      }
+    },
+    [catchError, token]
+  );
+
   // Loads status first, then loads the initial posts page.
-  const loadInitialData = async () => {
+  const loadInitialData = useCallback(async () => {
     try {
       const data = await graphqlRequest<StatusResponse>({
         query: `
@@ -109,78 +167,33 @@ const Feed = (props: FeedProps) => {
             }
           }
         `,
-        token: props.token
+        token
       });
 
-      setFeedState(prevState => ({ ...prevState, status: data.status.status }));
+      setFeedState((prevState) => ({ ...prevState, status: data.status.status }));
       // The status query and first posts query are separated to keep the UI responsive.
-      await loadPosts();
+      await fetchPosts(1);
     } catch (error) {
       catchError(error);
     }
-  };
+  }, [catchError, fetchPosts, token]);
 
   // Loads the current, next, or previous page of posts from GraphQL.
-  const loadPosts = async (direction?: LoadDirection) => {
-    try {
-      let page = feedState.postPage;
-      if (direction) {
-        // Pagination is driven locally and then mirrored in the GraphQL query variables.
-        if (direction === 'next') {
-          page++;
-        }
-        if (direction === 'previous') {
-          page--;
-        }
-        setFeedState(prevState => ({
-          ...prevState,
-          postsLoading: true,
-          posts: [],
-          postPage: page
-        }));
-      }
+  const loadPosts = async (direction: LoadDirection) => {
+    const page = direction === 'next' ? feedState.postPage + 1 : feedState.postPage - 1;
 
-      const data = await graphqlRequest<PostsResponse>({
-        query: `
-          query GetPosts($page: Int!, $limit: Int!) {
-            posts(page: $page, limit: $limit) {
-              totalItems
-              posts {
-                _id
-                title
-                content
-                imageUrl
-                createdAt
-                creator {
-                  _id
-                  name
-                }
-              }
-            }
-          }
-        `,
-        variables: {
-          page,
-          limit: 2
-        },
-        token: props.token
-      });
+    setFeedState((prevState) => ({
+      ...prevState,
+      postsLoading: true,
+      posts: [],
+      postPage: page
+    }));
 
-      setFeedState(prevState => ({
-        ...prevState,
-        posts: data.posts.posts,
-        totalPosts: data.posts.totalItems,
-        postsLoading: false
-      }));
-    } catch (error) {
-      catchError(error);
-    }
+    await fetchPosts(page);
   };
 
   // Persists the edited profile status for the current user.
-  const statusUpdateHandler = async (
-    event: React.FormEvent<HTMLFormElement>
-  ) => {
+  const statusUpdateHandler = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     try {
       const data = await graphqlRequest<UpdateStatusResponse>({
@@ -194,10 +207,10 @@ const Feed = (props: FeedProps) => {
         variables: {
           status: feedState.status
         },
-        token: props.token
+        token
       });
 
-      setFeedState(prevState => ({
+      setFeedState((prevState) => ({
         ...prevState,
         status: data.updateStatus.status
       }));
@@ -208,14 +221,14 @@ const Feed = (props: FeedProps) => {
 
   // Opens the post editor in create mode.
   const newPostHandler = () => {
-    setFeedState(prevState => ({ ...prevState, isEditing: true }));
+    setFeedState((prevState) => ({ ...prevState, isEditing: true }));
   };
 
   // Inserts a socket-created post into the visible list when appropriate.
-  const addPost = (post: FeedPost) => {
-    setFeedState(prevState => {
+  const addPost = useCallback((post: FeedPost) => {
+    setFeedState((prevState) => {
       const postAlreadyExists = prevState.posts.some(
-        existingPost => existingPost._id === post._id
+        (existingPost) => existingPost._id === post._id
       );
 
       if (postAlreadyExists) {
@@ -235,14 +248,12 @@ const Feed = (props: FeedProps) => {
         totalPosts
       };
     });
-  };
+  }, []);
 
   // Replaces a visible post after an edit event or edit mutation succeeds.
-  const updatePost = (post: FeedPost) => {
-    setFeedState(prevState => {
-      const postIndex = prevState.posts.findIndex(
-        existingPost => existingPost._id === post._id
-      );
+  const updatePost = useCallback((post: FeedPost) => {
+    setFeedState((prevState) => {
+      const postIndex = prevState.posts.findIndex((existingPost) => existingPost._id === post._id);
 
       if (postIndex < 0) {
         return prevState;
@@ -256,17 +267,17 @@ const Feed = (props: FeedProps) => {
         posts: updatedPosts
       };
     });
-  };
+  }, []);
 
   // Removes a post from local state and adjusts the total count.
-  const removePost = (postId: string) => {
-    setFeedState(prevState => {
+  const removePost = useCallback((postId: string) => {
+    setFeedState((prevState) => {
       if (deletedPostIds.current.has(postId)) {
         return { ...prevState, postsLoading: false };
       }
 
       deletedPostIds.current.add(postId);
-      const postExists = prevState.posts.some(post => post._id === postId);
+      const postExists = prevState.posts.some((post) => post._id === postId);
       const totalPosts = Math.max(prevState.totalPosts - 1, 0);
 
       if (!postExists) {
@@ -278,17 +289,17 @@ const Feed = (props: FeedProps) => {
 
       return {
         ...prevState,
-        posts: prevState.posts.filter(post => post._id !== postId),
+        posts: prevState.posts.filter((post) => post._id !== postId),
         totalPosts,
         postsLoading: false
       };
     });
-  };
+  }, []);
 
   // Opens the post editor with the selected post prefilled.
   const startEditPostHandler = (postId: string) => {
-    setFeedState(prevState => {
-      const loadedPost = prevState.posts.find(p => p._id === postId) || null;
+    setFeedState((prevState) => {
+      const loadedPost = prevState.posts.find((p) => p._id === postId) || null;
 
       return {
         ...prevState,
@@ -300,7 +311,7 @@ const Feed = (props: FeedProps) => {
 
   // Closes the post editor without saving changes.
   const cancelEditHandler = () => {
-    setFeedState(prevState => ({
+    setFeedState((prevState) => ({
       ...prevState,
       isEditing: false,
       editPost: null
@@ -316,7 +327,7 @@ const Feed = (props: FeedProps) => {
     const activeEditPost = feedState.editPost;
     const wasEditing = !!activeEditPost;
 
-    setFeedState(prevState => ({
+    setFeedState((prevState) => ({
       ...prevState,
       editLoading: true
     }));
@@ -369,18 +380,16 @@ const Feed = (props: FeedProps) => {
           : {
               postInput
             },
-        token: props.token
+        token
       });
       const post = activeEditPost
         ? (data as UpdatePostResponse).updatePost
         : (data as CreatePostResponse).createPost;
 
-      setFeedState(prevState => {
-        let updatedPosts = [...prevState.posts];
+      setFeedState((prevState) => {
+        const updatedPosts = [...prevState.posts];
         if (activeEditPost) {
-          const postIndex = prevState.posts.findIndex(
-            p => p._id === activeEditPost._id
-          );
+          const postIndex = prevState.posts.findIndex((p) => p._id === activeEditPost._id);
           if (postIndex >= 0) {
             updatedPosts[postIndex] = post;
           }
@@ -402,11 +411,11 @@ const Feed = (props: FeedProps) => {
     } catch (err) {
       console.log(err);
       if (isUnauthorizedError(err)) {
-        props.onLogout();
+        onLogout();
         return;
       }
 
-      setFeedState(prevState => ({
+      setFeedState((prevState) => ({
         ...prevState,
         isEditing: false,
         editPost: null,
@@ -421,12 +430,12 @@ const Feed = (props: FeedProps) => {
     if (input !== 'status') {
       return;
     }
-    setFeedState(prevState => ({ ...prevState, [input]: value }));
+    setFeedState((prevState) => ({ ...prevState, [input]: value }));
   };
 
   // Deletes a post through GraphQL and removes it from local state.
   const deletePostHandler = async (postId: string) => {
-    setFeedState(prevState => ({ ...prevState, postsLoading: true }));
+    setFeedState((prevState) => ({ ...prevState, postsLoading: true }));
     try {
       await graphqlRequest({
         query: `
@@ -437,53 +446,40 @@ const Feed = (props: FeedProps) => {
         variables: {
           id: postId
         },
-        token: props.token
+        token
       });
       removePost(postId);
     } catch (err) {
       console.log(err);
       if (isUnauthorizedError(err)) {
-        props.onLogout();
+        onLogout();
         return;
       }
 
-      setFeedState(prevState => ({ ...prevState, postsLoading: false }));
+      setFeedState((prevState) => ({ ...prevState, postsLoading: false }));
     }
   };
 
   // Clears the feed-level error modal state.
   const errorHandler = () => {
-    setFeedState(prevState => ({ ...prevState, error: null }));
-  };
-
-  // Stores a caught request error so the shared error modal can show it.
-  const catchError = (error: unknown) => {
-    if (isUnauthorizedError(error)) {
-      props.onLogout();
-      return;
-    }
-
-    setFeedState(prevState => ({
-      ...prevState,
-      error: normalizeError(error, 'Feed request failed.')
-    }));
+    setFeedState((prevState) => ({ ...prevState, error: null }));
   };
 
   // Connects realtime post events and loads the initial feed data.
   useEffect(() => {
-    if (!props.token) {
-      props.onLogout();
+    if (!token) {
+      onLogout();
       return;
     }
 
     socket.current = openSocket(API_URL, {
       auth: {
-        token: props.token
+        token
       }
     });
-    socket.current.on('connect_error', error => {
+    socket.current.on('connect_error', (error) => {
       if (error.message === 'Not authenticated.') {
-        props.onLogout();
+        onLogout();
         return;
       }
 
@@ -502,7 +498,7 @@ const Feed = (props: FeedProps) => {
       }
     });
 
-    loadInitialData();
+    void loadInitialData();
 
     // Disconnects the socket subscription when the feed page unmounts.
     return () => {
@@ -510,7 +506,7 @@ const Feed = (props: FeedProps) => {
         socket.current.disconnect();
       }
     };
-  }, [props.token]);
+  }, [addPost, catchError, loadInitialData, onLogout, removePost, token, updatePost]);
 
   // Renders the status form, editor modal, loading state, and paginated posts.
   return (
@@ -559,7 +555,7 @@ const Feed = (props: FeedProps) => {
             lastPage={Math.ceil(feedState.totalPosts / 2)}
             currentPage={feedState.postPage}
           >
-            {feedState.posts.map(post => (
+            {feedState.posts.map((post) => (
               <Post
                 key={post._id}
                 id={post._id}
@@ -568,7 +564,7 @@ const Feed = (props: FeedProps) => {
                 title={post.title}
                 image={post.imageUrl}
                 content={post.content}
-                canModify={post.creator._id === props.userId}
+                canModify={post.creator._id === userId}
                 onStartEdit={() => startEditPostHandler(post._id)}
                 onDelete={() => deletePostHandler(post._id)}
               />

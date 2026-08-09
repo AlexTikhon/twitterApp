@@ -15,9 +15,7 @@ type MobileNavigationProps = {
 // Renders the slide-in mobile nav with the same auth-aware items.
 const mobileNavigation = (props: MobileNavigationProps) => (
   <nav className={['mobile-nav', props.open ? 'open' : ''].join(' ')}>
-    <ul
-      className={['mobile-nav__items', props.mobile ? 'mobile' : ''].join(' ')}
-    >
+    <ul className={['mobile-nav__items', props.mobile ? 'mobile' : ''].join(' ')}>
       <NavigationItems
         mobile
         onChoose={props.onChooseItem}

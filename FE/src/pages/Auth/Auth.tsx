@@ -8,8 +8,6 @@ type AuthProps = {
 };
 
 // Provides the shared layout wrapper for auth forms.
-const auth = (props: AuthProps) => (
-  <section className="auth-form">{props.children}</section>
-);
+const auth = (props: AuthProps) => <section className="auth-form">{props.children}</section>;
 
 export default auth;

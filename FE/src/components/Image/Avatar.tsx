@@ -11,10 +11,7 @@ type AvatarProps = {
 
 // Renders a square avatar using the shared image renderer.
 const avatar = (props: AvatarProps) => (
-  <div
-    className="avatar"
-    style={{ width: props.size + 'rem', height: props.size + 'rem' }}
-  >
+  <div className="avatar" style={{ width: props.size + 'rem', height: props.size + 'rem' }}>
     <Image imageUrl={props.image} />
   </div>
 );

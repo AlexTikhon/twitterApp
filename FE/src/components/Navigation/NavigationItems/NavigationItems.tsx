@@ -21,14 +21,9 @@ type NavigationItemsProps = {
 const navigationItems = (props: NavigationItemsProps) => (
   <>
     {navItems
-      .filter(item => item.auth === props.isAuth)
-      .map(item => (
-        <li
-          key={item.id}
-          className={['navigation-item', props.mobile ? 'mobile' : ''].join(
-            ' '
-          )}
-        >
+      .filter((item) => item.auth === props.isAuth)
+      .map((item) => (
+        <li key={item.id} className={['navigation-item', props.mobile ? 'mobile' : ''].join(' ')}>
           <NavLink
             to={item.link}
             end

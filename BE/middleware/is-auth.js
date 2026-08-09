@@ -21,7 +21,7 @@ module.exports = (req, res, next) => {
     const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
     req.isAuth = true;
     req.userId = decodedToken.userId;
-  } catch (err) {
+  } catch {
     req.isAuth = false;
   }
 

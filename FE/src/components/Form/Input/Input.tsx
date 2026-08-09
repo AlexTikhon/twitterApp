@@ -33,7 +33,7 @@ const input = (props: InputProps) => (
         required={props.required}
         value={props.value}
         placeholder={props.placeholder}
-        onChange={e => props.onChange(props.id, e.target.value, e.target.files)}
+        onChange={(e) => props.onChange(props.id, e.target.value, e.target.files)}
         onBlur={props.onBlur}
       />
     )}
@@ -47,7 +47,7 @@ const input = (props: InputProps) => (
         rows={props.rows ? Number(props.rows) : undefined}
         required={props.required}
         value={props.value}
-        onChange={e => props.onChange(props.id, e.target.value)}
+        onChange={(e) => props.onChange(props.id, e.target.value)}
         onBlur={props.onBlur}
       />
     )}

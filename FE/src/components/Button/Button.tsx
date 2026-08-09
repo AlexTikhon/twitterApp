@@ -19,11 +19,7 @@ type ButtonProps = {
 const button = (props: ButtonProps) =>
   !props.link ? (
     <button
-      className={[
-        'button',
-        `button--${props.design}`,
-        `button--${props.mode}`
-      ].join(' ')}
+      className={['button', `button--${props.design}`, `button--${props.mode}`].join(' ')}
       onClick={props.onClick}
       disabled={props.disabled || props.loading}
       type={props.type}
@@ -32,11 +28,7 @@ const button = (props: ButtonProps) =>
     </button>
   ) : (
     <Link
-      className={[
-        'button',
-        `button--${props.design}`,
-        `button--${props.mode}`
-      ].join(' ')}
+      className={['button', `button--${props.design}`, `button--${props.mode}`].join(' ')}
       to={props.link}
     >
       {props.children}

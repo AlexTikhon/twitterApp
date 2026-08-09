@@ -6,7 +6,7 @@ const imagesDirectory = path.resolve(__dirname, '..', 'images');
 const storedImagePathPattern = /^\/images\/[a-zA-Z0-9._-]+$/;
 
 // Resolves a public image URL without allowing traversal outside /images.
-const resolveStoredImagePath = publicPath => {
+const resolveStoredImagePath = (publicPath) => {
   if (typeof publicPath !== 'string' || !storedImagePathPattern.test(publicPath)) {
     return null;
   }
@@ -17,7 +17,7 @@ const resolveStoredImagePath = publicPath => {
 };
 
 // Removes a stored image while treating missing and legacy-invalid paths safely.
-module.exports = async publicPath => {
+module.exports = async (publicPath) => {
   const absolutePath = resolveStoredImagePath(publicPath);
 
   if (!absolutePath) {

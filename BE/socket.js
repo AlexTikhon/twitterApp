@@ -36,7 +36,7 @@ exports.init = (server, allowedOrigins) => {
 
       client.data.userId = decodedToken.userId;
       return next();
-    } catch (error) {
+    } catch {
       return next(new Error('Not authenticated.'));
     }
   });

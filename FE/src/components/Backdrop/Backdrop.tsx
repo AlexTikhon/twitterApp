@@ -18,10 +18,7 @@ const backdrop = (props: BackdropProps) => {
   }
 
   return ReactDOM.createPortal(
-    <div
-      className={['backdrop', props.open ? 'open' : ''].join(' ')}
-      onClick={props.onClick}
-    />,
+    <div className={['backdrop', props.open ? 'open' : ''].join(' ')} onClick={props.onClick} />,
     backdropRoot
   );
 };

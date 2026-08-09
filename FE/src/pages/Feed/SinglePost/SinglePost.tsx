@@ -1,5 +1,5 @@
 // Loads a single post view from GraphQL using the route post id.
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
 import Image from '../../../components/Image/Image';
@@ -33,6 +33,7 @@ type PostResponse = {
 };
 
 const SinglePost = (props: SinglePostProps) => {
+  const { token, onLogout } = props;
   const { postId } = useParams();
   const [post, setPost] = useState<LoadedPost>({
     title: '',
@@ -43,7 +44,7 @@ const SinglePost = (props: SinglePostProps) => {
   });
 
   // Loads one post by id and maps the GraphQL response into display state.
-  const loadPost = async () => {
+  const loadPost = useCallback(async () => {
     if (!postId) {
       return;
     }
@@ -66,7 +67,7 @@ const SinglePost = (props: SinglePostProps) => {
         variables: {
           id: postId
         },
-        token: props.token
+        token
       });
       setPost({
         title: data.post.title,
@@ -78,15 +79,15 @@ const SinglePost = (props: SinglePostProps) => {
     } catch (err) {
       console.log(err);
       if (isUnauthorizedError(err)) {
-        props.onLogout();
+        onLogout();
       }
     }
-  };
+  }, [onLogout, postId, token]);
 
   // Fetches the post details once the route parameter is available.
   useEffect(() => {
     loadPost();
-  }, [postId, props.token]);
+  }, [loadPost]);
 
   // Renders the loaded post details.
   return (

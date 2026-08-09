@@ -9,13 +9,13 @@ services:
     volumes:
       - backend_images:/app/images
     expose:
-      - "8080"
+      - '8080'
     healthcheck:
       test:
         [
-          "CMD",
-          "node",
-          "-e",
+          'CMD',
+          'node',
+          '-e',
           "fetch('http://127.0.0.1:8080/health').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"
         ]
       interval: 10s
@@ -31,7 +31,7 @@ services:
       backend:
         condition: service_healthy
     ports:
-      - "80:80"
+      - '80:80'
 
 volumes:
   backend_images:

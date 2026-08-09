@@ -38,30 +38,15 @@ const getPositiveIntegerEnv = (name, fallback) => {
   return Number.isInteger(value) && value > 0 ? value : fallback;
 };
 
-const rateLimitWindowMs = getPositiveIntegerEnv(
-  'RATE_LIMIT_WINDOW_MS',
-  15 * 60 * 1000
-);
-const apiRateLimitMax = getPositiveIntegerEnv(
-  'RATE_LIMIT_MAX_REQUESTS',
-  300
-);
-const graphqlRateLimitMax = getPositiveIntegerEnv(
-  'GRAPHQL_RATE_LIMIT_MAX_REQUESTS',
-  120
-);
-const authRateLimitMax = getPositiveIntegerEnv(
-  'AUTH_RATE_LIMIT_MAX_REQUESTS',
-  20
-);
+const rateLimitWindowMs = getPositiveIntegerEnv('RATE_LIMIT_WINDOW_MS', 15 * 60 * 1000);
+const apiRateLimitMax = getPositiveIntegerEnv('RATE_LIMIT_MAX_REQUESTS', 300);
+const graphqlRateLimitMax = getPositiveIntegerEnv('GRAPHQL_RATE_LIMIT_MAX_REQUESTS', 120);
+const authRateLimitMax = getPositiveIntegerEnv('AUTH_RATE_LIMIT_MAX_REQUESTS', 20);
 
 // Builds the trusted browser origins list from env with local Vite defaults.
 const getAllowedCorsOrigins = () =>
-  (process.env.CORS_ORIGINS
-    ? process.env.CORS_ORIGINS.split(',')
-    : defaultCorsOrigins
-  )
-    .map(origin => origin.trim())
+  (process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',') : defaultCorsOrigins)
+    .map((origin) => origin.trim())
     .filter(Boolean);
 
 const allowedCorsOrigins = getAllowedCorsOrigins();
@@ -72,7 +57,7 @@ const createRateLimiter = (max, message) =>
     limit: max,
     standardHeaders: true,
     legacyHeaders: false,
-    skip: req => req.method === 'OPTIONS' || req.path === '/health',
+    skip: (req) => req.method === 'OPTIONS' || req.path === '/health',
     message: {
       message,
       data: null
@@ -93,7 +78,7 @@ const authRateLimiter = createRateLimiter(
 );
 
 // Detects auth root fields without relying on a caller-controlled operation name.
-const isAuthOperation = req => {
+const isAuthOperation = (req) => {
   if (typeof req.body?.query !== 'string') {
     return false;
   }
@@ -111,7 +96,7 @@ const isAuthOperation = req => {
     });
 
     return containsAuthField;
-  } catch (error) {
+  } catch {
     return false;
   }
 };
@@ -161,7 +146,7 @@ const notFoundHandler = (req, res) => {
 };
 
 // Normalizes thrown Express errors into the API error response shape.
-const errorHandler = (error, req, res, next) => {
+const errorHandler = (error, req, res, _next) => {
   const status = error.statusCode || error.status || 500;
   const message = error.message || 'Internal server error';
   const data = error.data || null;
@@ -185,7 +170,7 @@ if (!jwtSecret) {
 const startServer = async () => {
   try {
     await mongoose.connect(mongoDbUri);
-		console.log('MongoDB connected successfully');
+    console.log('MongoDB connected successfully');
 
     const apolloServer = new ApolloServer({
       typeDefs,
@@ -229,7 +214,7 @@ const startServer = async () => {
     const io = socket.init(server, allowedCorsOrigins);
 
     // Logs new realtime clients so socket connectivity is visible during dev.
-    io.on('connection', client => {
+    io.on('connection', (client) => {
       console.log(`Socket client connected: ${client.id}`);
     });
 
