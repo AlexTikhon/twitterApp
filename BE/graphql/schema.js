@@ -45,7 +45,6 @@ module.exports = `
     title: String!
     content: String!
     image: String
-    oldImagePath: String
   }
 
   type RootQuery {

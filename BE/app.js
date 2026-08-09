@@ -12,6 +12,7 @@ const morgan = require('morgan');
 const { rateLimit } = require('express-rate-limit');
 const { ApolloServer } = require('@apollo/server');
 const { expressMiddleware } = require('@as-integrations/express4');
+const { parse, visit } = require('graphql');
 
 const isAuth = require('./middleware/is-auth');
 const typeDefs = require('./graphql/schema');
@@ -21,6 +22,7 @@ const socket = require('./socket');
 dotenv.config();
 
 const app = express();
+app.set('trust proxy', 1);
 const server = http.createServer(app);
 const port = process.env.PORT || 8080;
 const mongoDbUri = process.env.MONGODB_URI;
@@ -47,6 +49,10 @@ const apiRateLimitMax = getPositiveIntegerEnv(
 const graphqlRateLimitMax = getPositiveIntegerEnv(
   'GRAPHQL_RATE_LIMIT_MAX_REQUESTS',
   120
+);
+const authRateLimitMax = getPositiveIntegerEnv(
+  'AUTH_RATE_LIMIT_MAX_REQUESTS',
+  20
 );
 
 // Builds the trusted browser origins list from env with local Vite defaults.
@@ -81,6 +87,37 @@ const graphqlRateLimiter = createRateLimiter(
   graphqlRateLimitMax,
   'Too many GraphQL requests. Please try again later.'
 );
+const authRateLimiter = createRateLimiter(
+  authRateLimitMax,
+  'Too many authentication attempts. Please try again later.'
+);
+
+// Detects auth root fields without relying on a caller-controlled operation name.
+const isAuthOperation = req => {
+  if (typeof req.body?.query !== 'string') {
+    return false;
+  }
+
+  try {
+    const document = parse(req.body.query);
+    let containsAuthField = false;
+
+    visit(document, {
+      Field(node) {
+        if (['login', 'createUser'].includes(node.name.value)) {
+          containsAuthField = true;
+        }
+      }
+    });
+
+    return containsAuthField;
+  } catch (error) {
+    return false;
+  }
+};
+
+const authRateLimitMiddleware = (req, res, next) =>
+  isAuthOperation(req) ? authRateLimiter(req, res, next) : next();
 
 // Allows same-origin/server-to-server requests and rejects unknown browser origins.
 const corsOptions = {
@@ -105,7 +142,6 @@ app.use(apiRateLimiter);
 // gets the security headers and compression settings consistently.
 app.use(
   helmet({
-    contentSecurityPolicy: false,
     crossOriginResourcePolicy: { policy: 'cross-origin' }
   })
 );
@@ -157,11 +193,19 @@ const startServer = async () => {
       // Keeps GraphQL errors compatible with the existing frontend error handling.
       formatError(formattedError, error) {
         const originalError = error.originalError || {};
+        const status = originalError.statusCode || 500;
+
+        if (status >= 500) {
+          console.error('Unhandled GraphQL error:', error);
+        }
 
         return {
-          message: originalError.message || formattedError.message,
-          status: originalError.statusCode || 500,
-          data: originalError.data || null
+          message:
+            status >= 500
+              ? 'Internal server error.'
+              : originalError.message || formattedError.message,
+          status,
+          data: status >= 500 ? null : originalError.data || null
         };
       }
     });
@@ -171,6 +215,7 @@ const startServer = async () => {
     // GraphQL is the single API entrypoint for auth, feed, and profile status.
     app.use(
       '/graphql',
+      authRateLimitMiddleware,
       graphqlRateLimiter,
       expressMiddleware(apolloServer, {
         // Makes the authenticated Express request available to all resolvers.
@@ -193,7 +238,8 @@ const startServer = async () => {
       console.log(`Server is running on port ${port}`);
     });
   } catch (err) {
-    console.error('MongoDB connection failed:', err);
+    console.error('Server startup failed:', err.message);
+    process.exitCode = 1;
   }
 };
 

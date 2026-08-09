@@ -3,21 +3,33 @@ services:
     build:
       context: ./BE
     restart: unless-stopped
+    init: true
     env_file:
       - ./BE/.env
     volumes:
       - backend_images:/app/images
     expose:
       - "8080"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8080/health').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
 
   frontend:
     build:
       context: ./FE
-      args:
-        VITE_API_URL: ${VITE_API_URL}
     restart: unless-stopped
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     ports:
       - "80:80"
 

@@ -37,19 +37,19 @@ const INITIAL_SIGNUP_FORM: SignupForm = {
     value: '',
     valid: false,
     touched: false,
-    validators: [required, email]
+    validators: [required, email, length({ max: 254 })]
   },
   password: {
     value: '',
     valid: false,
     touched: false,
-    validators: [required, length({ min: 5 })]
+    validators: [required, length({ min: 8, max: 72 })]
   },
   name: {
     value: '',
     valid: false,
     touched: false,
-    validators: [required]
+    validators: [required, length({ max: 80 })]
   }
 };
 

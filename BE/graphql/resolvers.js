@@ -11,6 +11,10 @@ const socket = require('../socket');
 
 const DEFAULT_POSTS_PAGE_SIZE = 2;
 const DEFAULT_MAX_POSTS_PAGE_SIZE = 20;
+const DUMMY_PASSWORD_HASH = bcrypt.hash(
+  'constant-time-login-comparison-only',
+  12
+);
 
 // Creates an error object carrying HTTP-like metadata for Apollo formatting.
 const createError = (message, statusCode, data = null) => {
@@ -76,7 +80,8 @@ const ensureAuth = req => {
 // Validates and normalizes signup input before creating a user.
 const validateUserInput = userInput => {
   const email = normalizeString(userInput.email).toLowerCase();
-  const password = normalizeString(userInput.password);
+  const password =
+    typeof userInput.password === 'string' ? userInput.password : '';
   const name = normalizeString(userInput.name);
   const errors = [];
 
@@ -84,15 +89,19 @@ const validateUserInput = userInput => {
     errors.push({ message: 'Please enter a valid email.', field: 'email' });
   }
 
-  if (password.length < 5) {
+  if (email.length > 254) {
+    errors.push({ message: 'Email must not exceed 254 characters.', field: 'email' });
+  }
+
+  if (password.length < 8 || Buffer.byteLength(password, 'utf8') > 72) {
     errors.push({
-      message: 'Password must be at least 5 characters long.',
+      message: 'Password must be 8-72 bytes long.',
       field: 'password'
     });
   }
 
-  if (!name) {
-    errors.push({ message: 'Name is required.', field: 'name' });
+  if (!name || name.length > 80) {
+    errors.push({ message: 'Name must be 1-80 characters long.', field: 'name' });
   }
 
   if (errors.length > 0) {
@@ -112,15 +121,18 @@ const validatePostInput = postInput => {
   const content = normalizeString(postInput.content);
   const image =
     typeof postInput.image === 'string' ? postInput.image : '';
-  const oldImagePath =
-    typeof postInput.oldImagePath === 'string'
-      ? postInput.oldImagePath
-      : '';
   const errors = [];
 
   if (title.length < 5) {
     errors.push({
       message: 'Title must be at least 5 characters long.',
+      field: 'title'
+    });
+  }
+
+  if (title.length > 120) {
+    errors.push({
+      message: 'Title must not exceed 120 characters.',
       field: 'title'
     });
   }
@@ -132,6 +144,13 @@ const validatePostInput = postInput => {
     });
   }
 
+  if (content.length > 5000) {
+    errors.push({
+      message: 'Content must not exceed 5000 characters.',
+      field: 'content'
+    });
+  }
+
   if (errors.length > 0) {
     throw createError('Validation failed.', 422, errors);
   }
@@ -139,8 +158,7 @@ const validatePostInput = postInput => {
   return {
     title,
     content,
-    image,
-    oldImagePath
+    image
   };
 };
 
@@ -219,18 +237,28 @@ const getSocketPostPayload = async postId => {
   };
 };
 
-// New images arrive as base64 strings; existing posts can keep their old path.
-const resolveImagePath = async (image, oldImagePath, currentImagePath = '') => {
+// Realtime delivery must not turn an already-committed mutation into an error.
+const emitPostEvent = async (action, postId) => {
+  try {
+    const post =
+      action === 'delete'
+        ? { _id: postId.toString() }
+        : await getSocketPostPayload(postId);
+
+    socket.getIo().emit('posts', { action, post });
+  } catch (error) {
+    console.error(`Failed to emit post ${action} event:`, error);
+  }
+};
+
+// New images arrive as base64 strings; only the server may reuse a stored path.
+const resolveImagePath = async (image, currentImagePath = '') => {
   if (image && image.startsWith('data:image/')) {
     return saveImageFromBase64(image);
   }
 
-  if (oldImagePath) {
-    return oldImagePath;
-  }
-
-  if (image && image.startsWith('/images/')) {
-    return image;
+  if (image) {
+    throw createError('Invalid image payload.', 422);
   }
 
   return currentImagePath;
@@ -260,16 +288,17 @@ const rootResolvers = {
   // Authenticates a user and returns a short-lived JWT session payload.
   login: async ({ email, password }) => {
     const normalizedEmail = normalizeString(email).toLowerCase();
-    const normalizedPassword = normalizeString(password);
+    const normalizedPassword = typeof password === 'string' ? password : '';
     const user = await User.findOne({ email: normalizedEmail });
+    const passwordIsSupported = Buffer.byteLength(normalizedPassword, 'utf8') <= 72;
+    const passwordHash = user ? user.password : await DUMMY_PASSWORD_HASH;
+    const isEqual = await bcrypt.compare(
+      passwordIsSupported ? normalizedPassword : '',
+      passwordHash
+    );
 
-    if (!user) {
-      throw createError('A user with this email could not be found.', 401);
-    }
-
-    const isEqual = await bcrypt.compare(normalizedPassword, user.password);
-    if (!isEqual) {
-      throw createError('Wrong password.', 401);
+    if (!user || !passwordIsSupported || !isEqual) {
+      throw createError('Invalid email or password.', 401);
     }
 
     const token = jwt.sign(
@@ -352,18 +381,29 @@ const rootResolvers = {
       creator: req.userId
     });
 
-    const createdPost = await post.save();
+    let createdPost;
 
-    await User.findByIdAndUpdate(req.userId, {
-      $push: { posts: createdPost._id }
-    });
+    try {
+      createdPost = await post.save();
 
-    const socketPost = await getSocketPostPayload(createdPost._id);
-    // Broadcast the freshly created post so every connected feed stays in sync.
-    socket.getIo().emit('posts', {
-      action: 'create',
-      post: socketPost
-    });
+      const updatedUser = await User.findByIdAndUpdate(req.userId, {
+        $push: { posts: createdPost._id }
+      });
+
+      if (!updatedUser) {
+        throw createError('User not found.', 404);
+      }
+    } catch (error) {
+      if (createdPost) {
+        await Post.findByIdAndDelete(createdPost._id).catch(cleanupError => {
+          console.error('Failed to roll back post creation:', cleanupError);
+        });
+      }
+      await clearImage(imageUrl);
+      throw error;
+    }
+
+    await emitPostEvent('create', createdPost._id);
 
     return transformPost(createdPost);
   },
@@ -383,33 +423,32 @@ const rootResolvers = {
       throw createError('Not authorized to update this post.', 403);
     }
 
-    const imageUrl = await resolveImagePath(
-      validatedPostInput.image,
-      validatedPostInput.oldImagePath,
-      post.imageUrl
-    );
+    const previousImageUrl = post.imageUrl;
+    const imageUrl = await resolveImagePath(validatedPostInput.image, previousImageUrl);
 
     if (!imageUrl) {
       throw createError('No image provided.', 422);
-    }
-
-    if (imageUrl !== post.imageUrl) {
-      // Replaced images are removed from disk to avoid orphaned files.
-      clearImage(post.imageUrl);
     }
 
     post.title = validatedPostInput.title;
     post.content = validatedPostInput.content;
     post.imageUrl = imageUrl;
 
-    await post.save();
+    try {
+      await post.save();
+    } catch (error) {
+      if (imageUrl !== previousImageUrl) {
+        await clearImage(imageUrl);
+      }
+      throw error;
+    }
 
-    const socketPost = await getSocketPostPayload(post._id);
-    // Send the updated post snapshot so clients can patch it in place.
-    socket.getIo().emit('posts', {
-      action: 'update',
-      post: socketPost
-    });
+    if (imageUrl !== previousImageUrl) {
+      // The old file is removed only after MongoDB references the new one.
+      await clearImage(previousImageUrl);
+    }
+
+    await emitPostEvent('update', post._id);
 
     return transformPost(post);
   },
@@ -428,18 +467,23 @@ const rootResolvers = {
       throw createError('Not authorized to delete this post.', 403);
     }
 
-    clearImage(post.imageUrl);
     await Post.findByIdAndDelete(id);
-    await User.findByIdAndUpdate(req.userId, {
-      $pull: { posts: id }
-    });
 
-    socket.getIo().emit('posts', {
-      action: 'delete',
-      post: {
-        _id: id
-      }
-    });
+    try {
+      await User.findByIdAndUpdate(req.userId, {
+        $pull: { posts: id }
+      });
+    } catch (error) {
+      // Restore the post if the denormalized user relation could not be updated.
+      await Post.create(post.toObject()).catch(rollbackError => {
+        console.error('Failed to roll back post deletion:', rollbackError);
+      });
+      throw error;
+    }
+    // Delete the file only after the database no longer references it.
+    await clearImage(post.imageUrl);
+
+    await emitPostEvent('delete', id);
 
     return true;
   },
@@ -447,14 +491,21 @@ const rootResolvers = {
   updateStatus: async ({ status }, req) => {
     ensureAuth(req);
 
+    const normalizedStatus = normalizeString(status);
+
+    if (!normalizedStatus || normalizedStatus.length > 160) {
+      throw createError('Status must be 1-160 characters long.', 422, [
+        { message: 'Status must be 1-160 characters long.', field: 'status' }
+      ]);
+    }
+
     const foundUser = await User.findById(req.userId);
 
     if (!foundUser) {
       throw createError('User not found.', 404);
     }
 
-    foundUser.status =
-      typeof status === 'string' ? status : foundUser.status;
+    foundUser.status = normalizedStatus;
     await foundUser.save();
 
     return {

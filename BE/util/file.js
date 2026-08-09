@@ -1,20 +1,38 @@
-// Deletes a stored image file when a post is updated or removed.
-const fs = require('fs');
+// Deletes only image files managed by this application.
+const fs = require('fs/promises');
 const path = require('path');
 
-// Removes a file relative to the backend root while ignoring already-deleted files.
-module.exports = filePath => {
-  if (!filePath) {
-    return;
+const imagesDirectory = path.resolve(__dirname, '..', 'images');
+const storedImagePathPattern = /^\/images\/[a-zA-Z0-9._-]+$/;
+
+// Resolves a public image URL without allowing traversal outside /images.
+const resolveStoredImagePath = publicPath => {
+  if (typeof publicPath !== 'string' || !storedImagePathPattern.test(publicPath)) {
+    return null;
   }
 
-  const normalizedPath = filePath.replace(/^\/+/, '');
-  const absolutePath = path.join(__dirname, '..', normalizedPath);
+  const absolutePath = path.resolve(imagesDirectory, path.basename(publicPath));
 
-  // Reports unexpected filesystem errors without interrupting the request flow.
-  fs.unlink(absolutePath, err => {
-    if (err && err.code !== 'ENOENT') {
-      console.error('Failed to delete file:', err);
+  return path.dirname(absolutePath) === imagesDirectory ? absolutePath : null;
+};
+
+// Removes a stored image while treating missing and legacy-invalid paths safely.
+module.exports = async publicPath => {
+  const absolutePath = resolveStoredImagePath(publicPath);
+
+  if (!absolutePath) {
+    console.warn('Skipped deletion of an invalid stored image path.');
+    return false;
+  }
+
+  try {
+    await fs.unlink(absolutePath);
+    return true;
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      console.error('Failed to delete stored image:', error);
     }
-  });
+
+    return error.code === 'ENOENT';
+  }
 };

@@ -47,7 +47,7 @@ const POST_FORM: PostForm = {
 		value: '',
 		valid: false,
 		touched: false,
-		validators: [required, length({ min: 5 })]
+		validators: [required, length({ min: 5, max: 120 })]
 	},
 	image: {
 		value: '',
@@ -59,7 +59,7 @@ const POST_FORM: PostForm = {
 		value: '',
 		valid: false,
 		touched: false,
-		validators: [required, length({ min: 5 })]
+		validators: [required, length({ min: 5, max: 5000 })]
 	}
 };
 

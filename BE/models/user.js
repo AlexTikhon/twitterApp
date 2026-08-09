@@ -9,7 +9,8 @@ const userSchema = new Schema(
       type: String,
       required: true,
       unique: true,
-      trim: true
+      trim: true,
+      maxlength: 254
     },
     password: {
       type: String,
@@ -18,11 +19,13 @@ const userSchema = new Schema(
     name: {
       type: String,
       required: true,
-      trim: true
+      trim: true,
+      maxlength: 80
     },
     status: {
       type: String,
-      default: 'New mini-twitter user'
+      default: 'New mini-twitter user',
+      maxlength: 160
     },
     posts: [
       {

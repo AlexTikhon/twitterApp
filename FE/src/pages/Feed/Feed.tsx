@@ -85,6 +85,7 @@ const normalizeError = (error: unknown, fallbackMessage: string): Error =>
 
 const Feed = (props: FeedProps) => {
   const socket = useRef<Socket | null>(null);
+  const deletedPostIds = useRef(new Set<string>());
   const [feedState, setFeedState] = useState<FeedState>({
     isEditing: false,
     posts: [],
@@ -260,6 +261,11 @@ const Feed = (props: FeedProps) => {
   // Removes a post from local state and adjusts the total count.
   const removePost = (postId: string) => {
     setFeedState(prevState => {
+      if (deletedPostIds.current.has(postId)) {
+        return { ...prevState, postsLoading: false };
+      }
+
+      deletedPostIds.current.add(postId);
       const postExists = prevState.posts.some(post => post._id === postId);
       const totalPosts = Math.max(prevState.totalPosts - 1, 0);
 
@@ -318,12 +324,8 @@ const Feed = (props: FeedProps) => {
     const postInput = {
       title: postData.title,
       content: postData.content,
-      // New files arrive as base64 strings; existing posts reuse their old image path.
-      image: isBase64Image(postData.image) ? postData.image : null,
-      oldImagePath:
-        activeEditPost && !isBase64Image(postData.image)
-          ? activeEditPost.imageUrl
-          : null
+      // The backend retains the current stored image when no new file is sent.
+      image: isBase64Image(postData.image) ? postData.image : null
     };
 
     try {
@@ -469,7 +471,24 @@ const Feed = (props: FeedProps) => {
 
   // Connects realtime post events and loads the initial feed data.
   useEffect(() => {
-    socket.current = openSocket(API_URL);
+    if (!props.token) {
+      props.onLogout();
+      return;
+    }
+
+    socket.current = openSocket(API_URL, {
+      auth: {
+        token: props.token
+      }
+    });
+    socket.current.on('connect_error', error => {
+      if (error.message === 'Not authenticated.') {
+        props.onLogout();
+        return;
+      }
+
+      catchError(error);
+    });
     // Socket events keep the visible page in sync after create, update, and delete actions.
     socket.current.on('posts', (data: PostsSocketEvent) => {
       if (data.action === 'create') {
@@ -491,7 +510,7 @@ const Feed = (props: FeedProps) => {
         socket.current.disconnect();
       }
     };
-  }, []);
+  }, [props.token]);
 
   // Renders the status form, editor modal, loading state, and paginated posts.
   return (
@@ -549,6 +568,7 @@ const Feed = (props: FeedProps) => {
                 title={post.title}
                 image={post.imageUrl}
                 content={post.content}
+                canModify={post.creator._id === props.userId}
                 onStartEdit={() => startEditPostHandler(post._id)}
                 onDelete={() => deletePostHandler(post._id)}
               />

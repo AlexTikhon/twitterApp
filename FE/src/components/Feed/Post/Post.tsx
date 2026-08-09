@@ -11,6 +11,7 @@ type PostProps = {
   title: string;
   image?: string;
   content?: string;
+  canModify: boolean;
   onStartEdit: () => void;
   onDelete: () => void;
 };
@@ -28,12 +29,16 @@ const post = (props: PostProps) => (
       <Button mode="flat" link={props.id}>
         View
       </Button>
-      <Button mode="flat" onClick={props.onStartEdit}>
-        Edit
-      </Button>
-      <Button mode="flat" design="danger" onClick={props.onDelete}>
-        Delete
-      </Button>
+      {props.canModify && (
+        <Button mode="flat" onClick={props.onStartEdit}>
+          Edit
+        </Button>
+      )}
+      {props.canModify && (
+        <Button mode="flat" design="danger" onClick={props.onDelete}>
+          Delete
+        </Button>
+      )}
     </div>
   </article>
 );
