@@ -54,6 +54,7 @@ export type GetPostsQuery = {
       readonly content: string;
       readonly imageUrl: string;
       readonly createdAt: string;
+      readonly updatedAt: string;
       readonly creator: { readonly _id: string; readonly name: string };
     }>;
   };
@@ -70,6 +71,7 @@ export type GetPostQuery = {
     readonly content: string;
     readonly imageUrl: string;
     readonly createdAt: string;
+    readonly updatedAt: string;
     readonly creator: { readonly _id: string; readonly name: string };
   };
 };
@@ -85,6 +87,7 @@ export type CreatePostMutation = {
     readonly content: string;
     readonly imageUrl: string;
     readonly createdAt: string;
+    readonly updatedAt: string;
     readonly creator: { readonly _id: string; readonly name: string };
   };
 };
@@ -101,6 +104,7 @@ export type UpdatePostMutation = {
     readonly content: string;
     readonly imageUrl: string;
     readonly createdAt: string;
+    readonly updatedAt: string;
     readonly creator: { readonly _id: string; readonly name: string };
   };
 };
@@ -389,6 +393,7 @@ export const GetPostsDocument = {
                       { kind: 'Field', name: { kind: 'Name', value: 'content' } },
                       { kind: 'Field', name: { kind: 'Name', value: 'imageUrl' } },
                       { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                      { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
                       {
                         kind: 'Field',
                         name: { kind: 'Name', value: 'creator' },
@@ -449,6 +454,7 @@ export const GetPostDocument = {
                 { kind: 'Field', name: { kind: 'Name', value: 'content' } },
                 { kind: 'Field', name: { kind: 'Name', value: 'imageUrl' } },
                 { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
                 {
                   kind: 'Field',
                   name: { kind: 'Name', value: 'creator' },
@@ -506,6 +512,7 @@ export const CreatePostDocument = {
                 { kind: 'Field', name: { kind: 'Name', value: 'content' } },
                 { kind: 'Field', name: { kind: 'Name', value: 'imageUrl' } },
                 { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
                 {
                   kind: 'Field',
                   name: { kind: 'Name', value: 'creator' },
@@ -576,6 +583,7 @@ export const UpdatePostDocument = {
                 { kind: 'Field', name: { kind: 'Name', value: 'content' } },
                 { kind: 'Field', name: { kind: 'Name', value: 'imageUrl' } },
                 { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
                 {
                   kind: 'Field',
                   name: { kind: 'Name', value: 'creator' },

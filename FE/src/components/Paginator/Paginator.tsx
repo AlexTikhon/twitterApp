@@ -5,8 +5,8 @@ import './Paginator.css';
 
 type PaginatorProps = {
   children: React.ReactNode;
-  currentPage: number;
-  lastPage: number;
+  hasPrevious: boolean;
+  hasNext: boolean;
   onPrevious: () => void;
   onNext: () => void;
 };
@@ -16,12 +16,12 @@ const paginator = (props: PaginatorProps) => (
   <div className="paginator">
     {props.children}
     <div className="paginator__controls">
-      {props.currentPage > 1 && (
+      {props.hasPrevious && (
         <button className="paginator__control" onClick={props.onPrevious}>
           Previous
         </button>
       )}
-      {props.currentPage < props.lastPage && (
+      {props.hasNext && (
         <button className="paginator__control" onClick={props.onNext}>
           Next
         </button>

@@ -37,6 +37,7 @@ query GetPosts($page: Int, $limit: Int, $first: Int, $after: String) {
       content
       imageUrl
       createdAt
+      updatedAt
       creator {
         _id
         name
@@ -52,6 +53,7 @@ query GetPost($id: ID!) {
     content
     imageUrl
     createdAt
+    updatedAt
     creator {
       _id
       name
@@ -66,6 +68,7 @@ mutation CreatePost($postInput: PostInputData!) {
     content
     imageUrl
     createdAt
+    updatedAt
     creator {
       _id
       name
@@ -80,6 +83,7 @@ mutation UpdatePost($id: ID!, $postInput: PostInputData!) {
     content
     imageUrl
     createdAt
+    updatedAt
     creator {
       _id
       name

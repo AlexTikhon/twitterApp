@@ -25,6 +25,19 @@ const logout = async (page: Page) => {
   await expect(page.getByRole('button', { name: 'Login', exact: true })).toBeVisible();
 };
 
+const createPost = async (page: Page, title: string) => {
+  await page.getByRole('button', { name: 'New Post', exact: true }).click();
+  await page.locator('#title').fill(title);
+  await page.locator('#content').fill(`Content for ${title}.`);
+  await page.locator('#image').setInputFiles({
+    name: 'pixel.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from(PNG_BASE64, 'base64')
+  });
+  await page.getByRole('button', { name: 'Accept', exact: true }).click();
+  await expect(page.locator('article.post').filter({ hasText: title })).toBeVisible();
+};
+
 test('signup, login, post CRUD, and ownership authorization', async ({ page }) => {
   const ownerEmail = 'owner@example.com';
   const otherEmail = 'other@example.com';
@@ -97,4 +110,21 @@ test('signup, login, post CRUD, and ownership authorization', async ({ page }) =
   post = page.locator('article.post').filter({ hasText: 'Browser-updated post' });
   await post.getByRole('button', { name: 'Delete', exact: true }).click();
   await expect(page.getByText('No posts found.')).toBeVisible();
+});
+
+test('navigates the feed with forward cursors and cursor history', async ({ page }) => {
+  await signup(page, 'pagination@example.com', 'Pagination User');
+  await login(page, 'pagination@example.com');
+
+  await createPost(page, 'Cursor post one');
+  await createPost(page, 'Cursor post two');
+  await createPost(page, 'Cursor post three');
+
+  await expect(page.getByText('Cursor post three')).toBeVisible();
+  await expect(page.getByText('Cursor post two')).toBeVisible();
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
+
+  await expect(page.getByText('Cursor post one')).toBeVisible();
+  await page.getByRole('button', { name: 'Previous', exact: true }).click();
+  await expect(page.getByText('Cursor post three')).toBeVisible();
 });

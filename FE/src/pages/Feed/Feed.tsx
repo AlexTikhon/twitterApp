@@ -1,17 +1,12 @@
 // Owns the timeline UI, GraphQL feed operations, and realtime socket updates.
 import React, { Fragment, useCallback, useEffect, useRef, useState } from 'react';
-import openSocket, { Socket } from 'socket.io-client';
 
-import Post from '../../components/Feed/Post/Post';
 import Button from '../../components/Button/Button';
 import FeedEdit from '../../components/Feed/FeedEdit/FeedEdit';
 import type { PostEditorData } from '../../components/Feed/FeedEdit/FeedEdit';
+import FeedList from '../../components/Feed/FeedList/FeedList';
 import Input from '../../components/Form/Input/Input';
-import Paginator from '../../components/Paginator/Paginator';
-import Loader from '../../components/Loader/Loader';
 import ErrorHandler from '../../components/ErrorHandler/ErrorHandler';
-import { API_URL } from '../../config';
-import type { GetPostsQuery } from '../../generated/graphql';
 import {
   CreatePostDocument,
   DeletePostDocument,
@@ -20,8 +15,10 @@ import {
   UpdatePostDocument,
   UpdateStatusDocument
 } from '../../generated/graphql';
+import { usePostsRealtime } from '../../hooks/usePostsRealtime';
 import { graphqlRequest, isUnauthorizedError } from '../../util/graphql';
 import { uploadImage } from '../../util/upload';
+import type { FeedPost, PostsRealtimeEvent } from './types';
 import './Feed.css';
 
 type FeedProps = {
@@ -30,41 +27,33 @@ type FeedProps = {
   onLogout: () => void;
 };
 
-type FeedPost = GetPostsQuery['posts']['posts'][number];
-
 type FeedState = {
   isEditing: boolean;
   posts: readonly FeedPost[];
-  totalPosts: number;
   editPost: FeedPost | null;
   status: string;
-  postPage: number;
+  cursorHistory: readonly (string | null)[];
+  endCursor: string | null;
+  hasNextPage: boolean;
   postsLoading: boolean;
   editLoading: boolean;
   error: Error | null;
 };
-
-type LoadDirection = 'next' | 'previous';
-
-type PostsSocketEvent =
-  | { action: 'create'; post: FeedPost }
-  | { action: 'update'; post: FeedPost }
-  | { action: 'delete'; post: Pick<FeedPost, '_id'> };
 
 const normalizeError = (error: unknown, fallbackMessage: string): Error =>
   error instanceof Error ? error : new Error(fallbackMessage);
 
 const Feed = (props: FeedProps) => {
   const { token, userId, onLogout } = props;
-  const socket = useRef<Socket | null>(null);
   const deletedPostIds = useRef(new Set<string>());
   const [feedState, setFeedState] = useState<FeedState>({
     isEditing: false,
     posts: [],
-    totalPosts: 0,
     editPost: null,
     status: '',
-    postPage: 1,
+    cursorHistory: [null],
+    endCursor: null,
+    hasNextPage: false,
     postsLoading: true,
     editLoading: false,
     error: null
@@ -80,26 +69,33 @@ const Feed = (props: FeedProps) => {
 
       setFeedState((prevState) => ({
         ...prevState,
+        postsLoading: false,
         error: normalizeError(error, 'Feed request failed.')
       }));
     },
     [onLogout]
   );
 
-  // Fetches one explicit page so initial loading does not depend on stale state.
+  // Fetches one cursor page and records the cursors needed to navigate backwards.
   const fetchPosts = useCallback(
-    async (page: number) => {
+    async (after: string | null, cursorHistory: readonly (string | null)[]) => {
       try {
         const data = await graphqlRequest({
           document: GetPostsDocument,
-          variables: { page, limit: 2, first: undefined, after: undefined }
+          variables: {
+            page: undefined,
+            limit: undefined,
+            first: 2,
+            after: after || undefined
+          }
         });
 
         setFeedState((prevState) => ({
           ...prevState,
           posts: data.posts.posts,
-          totalPosts: data.posts.totalItems,
-          postPage: page,
+          cursorHistory,
+          endCursor: data.posts.pageInfo.endCursor,
+          hasNextPage: data.posts.pageInfo.hasNextPage,
           postsLoading: false
         }));
       } catch (error) {
@@ -118,24 +114,33 @@ const Feed = (props: FeedProps) => {
 
       setFeedState((prevState) => ({ ...prevState, status: data.status.status }));
       // The status query and first posts query are separated to keep the UI responsive.
-      await fetchPosts(1);
+      await fetchPosts(null, [null]);
     } catch (error) {
       catchError(error);
     }
   }, [catchError, fetchPosts]);
 
-  // Loads the current, next, or previous page of posts from GraphQL.
-  const loadPosts = async (direction: LoadDirection) => {
-    const page = direction === 'next' ? feedState.postPage + 1 : feedState.postPage - 1;
-
+  const loadNextPage = async () => {
+    if (!feedState.endCursor || !feedState.hasNextPage) {
+      return;
+    }
+    const cursorHistory = [...feedState.cursorHistory, feedState.endCursor];
     setFeedState((prevState) => ({
       ...prevState,
       postsLoading: true,
-      posts: [],
-      postPage: page
+      posts: []
     }));
+    await fetchPosts(feedState.endCursor, cursorHistory);
+  };
 
-    await fetchPosts(page);
+  const loadPreviousPage = async () => {
+    if (feedState.cursorHistory.length <= 1) {
+      return;
+    }
+    const cursorHistory = feedState.cursorHistory.slice(0, -1);
+    const previousCursor = cursorHistory[cursorHistory.length - 1] || null;
+    setFeedState((prevState) => ({ ...prevState, postsLoading: true, posts: [] }));
+    await fetchPosts(previousCursor, cursorHistory);
   };
 
   // Persists the edited profile status for the current user.
@@ -174,17 +179,14 @@ const Feed = (props: FeedProps) => {
         return prevState;
       }
 
-      const totalPosts = prevState.totalPosts + 1;
-
       // Only the first page inserts the new item immediately into the visible list.
-      if (prevState.postPage !== 1) {
-        return { ...prevState, totalPosts };
+      if (prevState.cursorHistory.length !== 1) {
+        return prevState;
       }
 
       return {
         ...prevState,
-        posts: [post, ...prevState.posts].slice(0, 2),
-        totalPosts
+        posts: [post, ...prevState.posts].slice(0, 2)
       };
     });
   }, []);
@@ -217,23 +219,40 @@ const Feed = (props: FeedProps) => {
 
       deletedPostIds.current.add(postId);
       const postExists = prevState.posts.some((post) => post._id === postId);
-      const totalPosts = Math.max(prevState.totalPosts - 1, 0);
 
       if (!postExists) {
-        return {
-          ...prevState,
-          totalPosts
-        };
+        return { ...prevState, postsLoading: false };
       }
 
       return {
         ...prevState,
         posts: prevState.posts.filter((post) => post._id !== postId),
-        totalPosts,
         postsLoading: false
       };
     });
   }, []);
+
+  const handleRealtimeEvent = useCallback(
+    (event: PostsRealtimeEvent) => {
+      if (event.action === 'create') {
+        if (feedState.cursorHistory.length === 1) {
+          void fetchPosts(null, [null]);
+        } else {
+          addPost(event.post);
+        }
+        return;
+      }
+      if (event.action === 'update') {
+        updatePost(event.post);
+        return;
+      }
+
+      removePost(event.post._id);
+      const currentCursor = feedState.cursorHistory[feedState.cursorHistory.length - 1] || null;
+      void fetchPosts(currentCursor, feedState.cursorHistory);
+    },
+    [addPost, feedState.cursorHistory, fetchPosts, removePost, updatePost]
+  );
 
   // Opens the post editor with the selected post prefilled.
   const startEditPostHandler = (postId: string) => {
@@ -363,48 +382,17 @@ const Feed = (props: FeedProps) => {
     setFeedState((prevState) => ({ ...prevState, error: null }));
   };
 
-  // Connects realtime post events and loads the initial feed data.
+  usePostsRealtime({
+    token,
+    onEvent: handleRealtimeEvent,
+    onError: catchError,
+    onUnauthorized: onLogout
+  });
+
+  // Loads profile and feed data when the authenticated feed mounts.
   useEffect(() => {
-    if (!token) {
-      onLogout();
-      return;
-    }
-
-    socket.current = openSocket(API_URL, {
-      auth: {
-        token
-      }
-    });
-    socket.current.on('connect_error', (error) => {
-      if (error.message === 'Not authenticated.') {
-        onLogout();
-        return;
-      }
-
-      catchError(error);
-    });
-    // Socket events keep the visible page in sync after create, update, and delete actions.
-    socket.current.on('posts', (data: PostsSocketEvent) => {
-      if (data.action === 'create') {
-        addPost(data.post);
-      }
-      if (data.action === 'update') {
-        updatePost(data.post);
-      }
-      if (data.action === 'delete') {
-        removePost(data.post._id);
-      }
-    });
-
     void loadInitialData();
-
-    // Disconnects the socket subscription when the feed page unmounts.
-    return () => {
-      if (socket.current) {
-        socket.current.disconnect();
-      }
-    };
-  }, [addPost, catchError, loadInitialData, onLogout, removePost, token, updatePost]);
+  }, [loadInitialData]);
 
   // Renders the status form, editor modal, loading state, and paginated posts.
   return (
@@ -438,37 +426,17 @@ const Feed = (props: FeedProps) => {
         </Button>
       </section>
       <section className="feed">
-        {feedState.postsLoading && (
-          <div style={{ textAlign: 'center', marginTop: '2rem' }}>
-            <Loader />
-          </div>
-        )}
-        {feedState.posts.length <= 0 && !feedState.postsLoading ? (
-          <p style={{ textAlign: 'center' }}>No posts found.</p>
-        ) : null}
-        {!feedState.postsLoading && (
-          <Paginator
-            onPrevious={() => loadPosts('previous')}
-            onNext={() => loadPosts('next')}
-            lastPage={Math.ceil(feedState.totalPosts / 2)}
-            currentPage={feedState.postPage}
-          >
-            {feedState.posts.map((post) => (
-              <Post
-                key={post._id}
-                id={post._id}
-                author={post.creator.name}
-                date={new Date(post.createdAt).toLocaleDateString('en-US')}
-                title={post.title}
-                image={post.imageUrl}
-                content={post.content}
-                canModify={post.creator._id === userId}
-                onStartEdit={() => startEditPostHandler(post._id)}
-                onDelete={() => deletePostHandler(post._id)}
-              />
-            ))}
-          </Paginator>
-        )}
+        <FeedList
+          posts={feedState.posts}
+          loading={feedState.postsLoading}
+          userId={userId}
+          hasPreviousPage={feedState.cursorHistory.length > 1}
+          hasNextPage={feedState.hasNextPage}
+          onPreviousPage={() => void loadPreviousPage()}
+          onNextPage={() => void loadNextPage()}
+          onEdit={startEditPostHandler}
+          onDelete={(postId) => void deletePostHandler(postId)}
+        />
       </section>
     </Fragment>
   );
