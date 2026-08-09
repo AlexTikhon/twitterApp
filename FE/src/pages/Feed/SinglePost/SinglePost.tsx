@@ -3,13 +3,11 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
 import Image from '../../../components/Image/Image';
-import type { GetPostQuery } from '../../../generated/graphql';
+import { GetPostDocument } from '../../../generated/graphql';
 import { graphqlRequest, isUnauthorizedError } from '../../../util/graphql';
 import './SinglePost.css';
 
 type SinglePostProps = {
-  token: string | null;
-  userId?: string | null;
   onLogout: () => void;
 };
 
@@ -22,7 +20,7 @@ type LoadedPost = {
 };
 
 const SinglePost = (props: SinglePostProps) => {
-  const { token, onLogout } = props;
+  const { onLogout } = props;
   const { postId } = useParams();
   const [post, setPost] = useState<LoadedPost>({
     title: '',
@@ -39,24 +37,11 @@ const SinglePost = (props: SinglePostProps) => {
     }
 
     try {
-      const data = await graphqlRequest<GetPostQuery>({
-        query: `
-          query GetPost($id: ID!) {
-            post(id: $id) {
-              title
-              content
-              imageUrl
-              createdAt
-              creator {
-                name
-              }
-            }
-          }
-        `,
+      const data = await graphqlRequest({
+        document: GetPostDocument,
         variables: {
           id: postId
-        },
-        token
+        }
       });
       setPost({
         title: data.post.title,
@@ -71,7 +56,7 @@ const SinglePost = (props: SinglePostProps) => {
         onLogout();
       }
     }
-  }, [onLogout, postId, token]);
+  }, [onLogout, postId]);
 
   // Fetches the post details once the route parameter is available.
   useEffect(() => {

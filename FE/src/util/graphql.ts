@@ -1,12 +1,11 @@
-// Sends GraphQL requests and normalizes backend errors into thrown JS errors.
-import { ApolloClient, HttpLink, InMemoryCache, gql } from '@apollo/client';
+// Sends typed GraphQL documents through the application-wide Apollo client.
+import type { TypedDocumentNode } from '@apollo/client';
 
-import { GRAPHQL_URL } from '../config';
+import { apolloClient } from '../apollo';
 
 type GraphqlRequestOptions = {
-  query: string;
-  variables?: Record<string, unknown>;
-  token?: string | null;
+  document: TypedDocumentNode<unknown, unknown>;
+  variables?: unknown;
 };
 
 export type GraphqlRequestError = Error & {
@@ -17,49 +16,29 @@ export type GraphqlRequestError = Error & {
 export const isUnauthorizedError = (error: unknown) =>
   Boolean(error && typeof error === 'object' && (error as GraphqlRequestError).statusCode === 401);
 
-// Creates an Apollo client for one request with optional bearer auth headers.
-const createClient = (token?: string | null) => {
-  const headers: Record<string, string> = {};
-  if (token) {
-    headers.Authorization = 'Bearer ' + token;
-  }
-
-  return new ApolloClient({
-    link: new HttpLink({
-      uri: GRAPHQL_URL,
-      headers
-    }),
-    cache: new InMemoryCache(),
-    defaultOptions: {
-      query: {
-        fetchPolicy: 'no-cache'
-      },
-      mutate: {
-        fetchPolicy: 'no-cache'
-      }
-    }
-  });
-};
-
 // Executes a GraphQL query or mutation and rethrows errors in the app format.
-export const graphqlRequest = async <TData = unknown>({
-  query,
-  variables = {},
-  token
-}: GraphqlRequestOptions): Promise<TData> => {
-  const client = createClient(token);
-  const document = gql(query);
-  const isMutation = query.trim().startsWith('mutation');
+export const graphqlRequest = async <TData, TVariables>({
+  document,
+  variables
+}: GraphqlRequestOptions & {
+  document: TypedDocumentNode<TData, TVariables>;
+  variables?: TVariables;
+}): Promise<TData> => {
+  const operation = document.definitions.find(
+    (definition) => definition.kind === 'OperationDefinition'
+  );
+  const isMutation =
+    operation?.kind === 'OperationDefinition' && operation.operation === 'mutation';
 
   try {
     const result = isMutation
-      ? await client.mutate<TData>({
+      ? await apolloClient.mutate<TData, TVariables>({
           mutation: document,
-          variables
+          variables: variables as TVariables
         })
-      : await client.query<TData>({
+      : await apolloClient.query<TData, TVariables>({
           query: document,
-          variables
+          variables: variables as TVariables
         });
 
     return result.data as TData;

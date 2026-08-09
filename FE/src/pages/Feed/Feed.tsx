@@ -11,12 +11,14 @@ import Paginator from '../../components/Paginator/Paginator';
 import Loader from '../../components/Loader/Loader';
 import ErrorHandler from '../../components/ErrorHandler/ErrorHandler';
 import { API_URL } from '../../config';
-import type {
-  CreatePostMutation,
-  GetPostsQuery,
-  GetStatusQuery,
-  UpdatePostMutation,
-  UpdateStatusMutation
+import type { GetPostsQuery } from '../../generated/graphql';
+import {
+  CreatePostDocument,
+  DeletePostDocument,
+  GetPostsDocument,
+  GetStatusDocument,
+  UpdatePostDocument,
+  UpdateStatusDocument
 } from '../../generated/graphql';
 import { graphqlRequest, isUnauthorizedError } from '../../util/graphql';
 import { uploadImage } from '../../util/upload';
@@ -43,12 +45,6 @@ type FeedState = {
 };
 
 type LoadDirection = 'next' | 'previous';
-
-type StatusResponse = GetStatusQuery;
-type PostsResponse = GetPostsQuery;
-type UpdateStatusResponse = UpdateStatusMutation;
-type CreatePostResponse = CreatePostMutation;
-type UpdatePostResponse = UpdatePostMutation;
 
 type PostsSocketEvent =
   | { action: 'create'; post: FeedPost }
@@ -94,31 +90,9 @@ const Feed = (props: FeedProps) => {
   const fetchPosts = useCallback(
     async (page: number) => {
       try {
-        const data = await graphqlRequest<PostsResponse>({
-          query: `
-            query GetPosts($page: Int!, $limit: Int!) {
-              posts(page: $page, limit: $limit) {
-                totalItems
-                pageInfo {
-                  endCursor
-                  hasNextPage
-                }
-                posts {
-                  _id
-                  title
-                  content
-                  imageUrl
-                  createdAt
-                  creator {
-                    _id
-                    name
-                  }
-                }
-              }
-            }
-          `,
-          variables: { page, limit: 2 },
-          token
+        const data = await graphqlRequest({
+          document: GetPostsDocument,
+          variables: { page, limit: 2, first: undefined, after: undefined }
         });
 
         setFeedState((prevState) => ({
@@ -132,21 +106,14 @@ const Feed = (props: FeedProps) => {
         catchError(error);
       }
     },
-    [catchError, token]
+    [catchError]
   );
 
   // Loads status first, then loads the initial posts page.
   const loadInitialData = useCallback(async () => {
     try {
-      const data = await graphqlRequest<StatusResponse>({
-        query: `
-          query GetStatus {
-            status {
-              status
-            }
-          }
-        `,
-        token
+      const data = await graphqlRequest({
+        document: GetStatusDocument
       });
 
       setFeedState((prevState) => ({ ...prevState, status: data.status.status }));
@@ -155,7 +122,7 @@ const Feed = (props: FeedProps) => {
     } catch (error) {
       catchError(error);
     }
-  }, [catchError, fetchPosts, token]);
+  }, [catchError, fetchPosts]);
 
   // Loads the current, next, or previous page of posts from GraphQL.
   const loadPosts = async (direction: LoadDirection) => {
@@ -175,18 +142,11 @@ const Feed = (props: FeedProps) => {
   const statusUpdateHandler = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     try {
-      const data = await graphqlRequest<UpdateStatusResponse>({
-        query: `
-          mutation UpdateStatus($status: String!) {
-            updateStatus(status: $status) {
-              status
-            }
-          }
-        `,
+      const data = await graphqlRequest({
+        document: UpdateStatusDocument,
         variables: {
           status: feedState.status
-        },
-        token
+        }
       });
 
       setFeedState((prevState) => ({
@@ -315,51 +275,19 @@ const Feed = (props: FeedProps) => {
         imageUploadId
       };
 
-      const data = await graphqlRequest<CreatePostResponse | UpdatePostResponse>({
-        query: activeEditPost
-          ? `
-              mutation UpdatePost($id: ID!, $postInput: PostInputData!) {
-                updatePost(id: $id, postInput: $postInput) {
-                  _id
-                  title
-                  content
-                  imageUrl
-                  createdAt
-                  creator {
-                    _id
-                    name
-                  }
-                }
-              }
-            `
-          : `
-              mutation CreatePost($postInput: PostInputData!) {
-                createPost(postInput: $postInput) {
-                  _id
-                  title
-                  content
-                  imageUrl
-                  createdAt
-                  creator {
-                    _id
-                    name
-                  }
-                }
-              }
-            `,
-        variables: activeEditPost
-          ? {
-              id: activeEditPost._id,
-              postInput
-            }
-          : {
-              postInput
-            },
-        token
-      });
       const post = activeEditPost
-        ? (data as UpdatePostResponse).updatePost
-        : (data as CreatePostResponse).createPost;
+        ? (
+            await graphqlRequest({
+              document: UpdatePostDocument,
+              variables: { id: activeEditPost._id, postInput }
+            })
+          ).updatePost
+        : (
+            await graphqlRequest({
+              document: CreatePostDocument,
+              variables: { postInput }
+            })
+          ).createPost;
 
       setFeedState((prevState) => {
         const updatedPosts = [...prevState.posts];
@@ -413,15 +341,10 @@ const Feed = (props: FeedProps) => {
     setFeedState((prevState) => ({ ...prevState, postsLoading: true }));
     try {
       await graphqlRequest({
-        query: `
-          mutation DeletePost($id: ID!) {
-            deletePost(id: $id)
-          }
-        `,
+        document: DeletePostDocument,
         variables: {
           id: postId
-        },
-        token
+        }
       });
       removePost(postId);
     } catch (err) {
