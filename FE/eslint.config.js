@@ -6,7 +6,13 @@ import tseslint from 'typescript-eslint';
 
 export default [
   {
-    ignores: ['dist/**', 'coverage/**', 'node_modules/**']
+    ignores: [
+      'dist/**',
+      'coverage/**',
+      'node_modules/**',
+      'playwright-report/**',
+      'test-results/**'
+    ]
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
@@ -30,7 +36,7 @@ export default [
     }
   },
   {
-    files: ['vite.config.ts'],
+    files: ['vite.config.ts', 'playwright.config.ts', 'e2e/**/*.ts'],
     languageOptions: {
       globals: globals.node
     }

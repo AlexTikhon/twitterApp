@@ -4,3 +4,5 @@ BE/.env
 FE/.env
 dist
 build
+FE/playwright-report
+FE/test-results
