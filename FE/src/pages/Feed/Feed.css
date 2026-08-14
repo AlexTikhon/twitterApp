@@ -21,6 +21,24 @@
   height: 7rem;
 }
 
+.new-post__character-count {
+  margin-top: -0.75rem;
+  text-align: right;
+  color: #707070;
+}
+
+.feed__loading,
+.feed__empty,
+.feed__load-more,
+.feed__end {
+  margin: 2rem auto;
+  text-align: center;
+}
+
+.feed__sentinel {
+  height: 1px;
+}
+
 @media (min-width: 768px) {
   .feed__status {
     width: 30rem;

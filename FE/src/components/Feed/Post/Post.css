@@ -11,10 +11,11 @@
   margin: 0;
 }
 
-.post__title {
-  font-size: 1.5rem;
+.post__content {
+  font-size: 1.1rem;
   margin: 1rem 0;
-  color: #3b0062;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .post__image {
@@ -24,6 +25,10 @@
 
 .post__actions {
   text-align: right;
+}
+
+.post__meta a {
+  color: #3b0062;
 }
 
 @media (min-width: 768px) {

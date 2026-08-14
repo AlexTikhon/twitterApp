@@ -34,10 +34,12 @@ const errorLink = onError(({ graphQLErrors, networkError }) => {
 
 export const apolloClient = new ApolloClient({
   link: from([errorLink, authLink, new HttpLink({ uri: GRAPHQL_URL })]),
-  cache: new InMemoryCache(),
-  defaultOptions: {
-    watchQuery: { fetchPolicy: 'no-cache' },
-    query: { fetchPolicy: 'no-cache' },
-    mutate: { fetchPolicy: 'no-cache' }
-  }
+  cache: new InMemoryCache({
+    typePolicies: {
+      RootQuery: { queryType: true },
+      RootMutation: { mutationType: true },
+      Post: { keyFields: ['_id'] },
+      User: { keyFields: ['_id'] }
+    }
+  })
 });

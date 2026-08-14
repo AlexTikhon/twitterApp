@@ -40,29 +40,29 @@ const validateUserInput = (userInput) => {
 };
 
 const validatePostInput = (postInput) => {
-  const title = normalizeString(postInput.title);
   const content = normalizeString(postInput.content);
   const imageUploadId =
     typeof postInput.imageUploadId === 'string' ? postInput.imageUploadId.trim() : '';
+  const removeImage = postInput.removeImage === true;
   const errors = [];
 
-  if (title.length < 5) {
-    errors.push({ message: 'Title must be at least 5 characters long.', field: 'title' });
+  if (!content) {
+    errors.push({ message: 'Content is required.', field: 'content' });
   }
-  if (title.length > 120) {
-    errors.push({ message: 'Title must not exceed 120 characters.', field: 'title' });
+  if (content.length > 500) {
+    errors.push({ message: 'Content must not exceed 500 characters.', field: 'content' });
   }
-  if (content.length < 5) {
-    errors.push({ message: 'Content must be at least 5 characters long.', field: 'content' });
-  }
-  if (content.length > 5000) {
-    errors.push({ message: 'Content must not exceed 5000 characters.', field: 'content' });
+  if (imageUploadId && removeImage) {
+    errors.push({
+      message: 'Choose either a new image or image removal.',
+      field: 'imageUploadId'
+    });
   }
   if (errors.length > 0) {
     throw createError('Validation failed.', 422, errors);
   }
 
-  return { title, content, imageUploadId };
+  return { content, imageUploadId, removeImage };
 };
 
 const validateStatus = (status) => {
@@ -77,13 +77,7 @@ const validateStatus = (status) => {
   return normalizedStatus;
 };
 
-const getBoundedPagination = (page, limit, defaultLimit, maxLimit) => ({
-  currentPage: Math.max(Number(page) || 1, 1),
-  perPage: Math.min(Math.max(Number(limit) || defaultLimit, 1), maxLimit)
-});
-
 module.exports = {
-  getBoundedPagination,
   normalizeString,
   validateObjectId,
   validatePostInput,

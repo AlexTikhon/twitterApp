@@ -7,7 +7,7 @@ import { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-node/
 export type PostInputData = {
   readonly content: string;
   readonly imageUploadId: string | number | null | undefined;
-  readonly title: string;
+  readonly removeImage: boolean | null | undefined;
 };
 
 export type CreateUserMutationVariables = Exact<{
@@ -37,11 +37,19 @@ export type UpdateStatusMutationVariables = Exact<{
 
 export type UpdateStatusMutation = { readonly updateStatus: { readonly status: string } };
 
+export type PostFieldsFragment = {
+  readonly _id: string;
+  readonly content: string;
+  readonly imageUrl: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly creator: { readonly _id: string; readonly name: string };
+};
+
 export type GetPostsQueryVariables = Exact<{
-  page: number | null | undefined;
-  limit: number | null | undefined;
   first: number | null | undefined;
   after: string | null | undefined;
+  creatorId: string | number | null | undefined;
 }>;
 
 export type GetPostsQuery = {
@@ -50,9 +58,8 @@ export type GetPostsQuery = {
     readonly pageInfo: { readonly endCursor: string | null; readonly hasNextPage: boolean };
     readonly posts: ReadonlyArray<{
       readonly _id: string;
-      readonly title: string;
       readonly content: string;
-      readonly imageUrl: string;
+      readonly imageUrl: string | null;
       readonly createdAt: string;
       readonly updatedAt: string;
       readonly creator: { readonly _id: string; readonly name: string };
@@ -67,13 +74,20 @@ export type GetPostQueryVariables = Exact<{
 export type GetPostQuery = {
   readonly post: {
     readonly _id: string;
-    readonly title: string;
     readonly content: string;
-    readonly imageUrl: string;
+    readonly imageUrl: string | null;
     readonly createdAt: string;
     readonly updatedAt: string;
     readonly creator: { readonly _id: string; readonly name: string };
   };
+};
+
+export type GetUserQueryVariables = Exact<{
+  id: string | number;
+}>;
+
+export type GetUserQuery = {
+  readonly user: { readonly _id: string; readonly name: string; readonly status: string };
 };
 
 export type CreatePostMutationVariables = Exact<{
@@ -83,9 +97,8 @@ export type CreatePostMutationVariables = Exact<{
 export type CreatePostMutation = {
   readonly createPost: {
     readonly _id: string;
-    readonly title: string;
     readonly content: string;
-    readonly imageUrl: string;
+    readonly imageUrl: string | null;
     readonly createdAt: string;
     readonly updatedAt: string;
     readonly creator: { readonly _id: string; readonly name: string };
@@ -100,9 +113,8 @@ export type UpdatePostMutationVariables = Exact<{
 export type UpdatePostMutation = {
   readonly updatePost: {
     readonly _id: string;
-    readonly title: string;
     readonly content: string;
-    readonly imageUrl: string;
+    readonly imageUrl: string | null;
     readonly createdAt: string;
     readonly updatedAt: string;
     readonly creator: { readonly _id: string; readonly name: string };
@@ -115,6 +127,37 @@ export type DeletePostMutationVariables = Exact<{
 
 export type DeletePostMutation = { readonly deletePost: boolean };
 
+export const PostFieldsFragmentDoc = {
+  kind: 'Document',
+  definitions: [
+    {
+      kind: 'FragmentDefinition',
+      name: { kind: 'Name', value: 'PostFields' },
+      typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Post' } },
+      selectionSet: {
+        kind: 'SelectionSet',
+        selections: [
+          { kind: 'Field', name: { kind: 'Name', value: '_id' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'content' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'imageUrl' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+          {
+            kind: 'Field',
+            name: { kind: 'Name', value: 'creator' },
+            selectionSet: {
+              kind: 'SelectionSet',
+              selections: [
+                { kind: 'Field', name: { kind: 'Name', value: '_id' } },
+                { kind: 'Field', name: { kind: 'Name', value: 'name' } }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+} as unknown as DocumentNode<PostFieldsFragment, unknown>;
 export const CreateUserDocument = {
   kind: 'Document',
   definitions: [
@@ -320,16 +363,6 @@ export const GetPostsDocument = {
       variableDefinitions: [
         {
           kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'page' } },
-          type: { kind: 'NamedType', name: { kind: 'Name', value: 'Int' } }
-        },
-        {
-          kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'limit' } },
-          type: { kind: 'NamedType', name: { kind: 'Name', value: 'Int' } }
-        },
-        {
-          kind: 'VariableDefinition',
           variable: { kind: 'Variable', name: { kind: 'Name', value: 'first' } },
           type: { kind: 'NamedType', name: { kind: 'Name', value: 'Int' } }
         },
@@ -337,6 +370,11 @@ export const GetPostsDocument = {
           kind: 'VariableDefinition',
           variable: { kind: 'Variable', name: { kind: 'Name', value: 'after' } },
           type: { kind: 'NamedType', name: { kind: 'Name', value: 'String' } }
+        },
+        {
+          kind: 'VariableDefinition',
+          variable: { kind: 'Variable', name: { kind: 'Name', value: 'creatorId' } },
+          type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } }
         }
       ],
       selectionSet: {
@@ -348,16 +386,6 @@ export const GetPostsDocument = {
             arguments: [
               {
                 kind: 'Argument',
-                name: { kind: 'Name', value: 'page' },
-                value: { kind: 'Variable', name: { kind: 'Name', value: 'page' } }
-              },
-              {
-                kind: 'Argument',
-                name: { kind: 'Name', value: 'limit' },
-                value: { kind: 'Variable', name: { kind: 'Name', value: 'limit' } }
-              },
-              {
-                kind: 'Argument',
                 name: { kind: 'Name', value: 'first' },
                 value: { kind: 'Variable', name: { kind: 'Name', value: 'first' } }
               },
@@ -365,6 +393,11 @@ export const GetPostsDocument = {
                 kind: 'Argument',
                 name: { kind: 'Name', value: 'after' },
                 value: { kind: 'Variable', name: { kind: 'Name', value: 'after' } }
+              },
+              {
+                kind: 'Argument',
+                name: { kind: 'Name', value: 'creatorId' },
+                value: { kind: 'Variable', name: { kind: 'Name', value: 'creatorId' } }
               }
             ],
             selectionSet: {
@@ -388,26 +421,36 @@ export const GetPostsDocument = {
                   selectionSet: {
                     kind: 'SelectionSet',
                     selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: '_id' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'title' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'content' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'imageUrl' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
-                      {
-                        kind: 'Field',
-                        name: { kind: 'Name', value: 'creator' },
-                        selectionSet: {
-                          kind: 'SelectionSet',
-                          selections: [
-                            { kind: 'Field', name: { kind: 'Name', value: '_id' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'name' } }
-                          ]
-                        }
-                      }
+                      { kind: 'FragmentSpread', name: { kind: 'Name', value: 'PostFields' } }
                     ]
                   }
                 }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      kind: 'FragmentDefinition',
+      name: { kind: 'Name', value: 'PostFields' },
+      typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Post' } },
+      selectionSet: {
+        kind: 'SelectionSet',
+        selections: [
+          { kind: 'Field', name: { kind: 'Name', value: '_id' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'content' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'imageUrl' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+          {
+            kind: 'Field',
+            name: { kind: 'Name', value: 'creator' },
+            selectionSet: {
+              kind: 'SelectionSet',
+              selections: [
+                { kind: 'Field', name: { kind: 'Name', value: '_id' } },
+                { kind: 'Field', name: { kind: 'Name', value: 'name' } }
               ]
             }
           }
@@ -448,24 +491,32 @@ export const GetPostDocument = {
             ],
             selectionSet: {
               kind: 'SelectionSet',
+              selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'PostFields' } }]
+            }
+          }
+        ]
+      }
+    },
+    {
+      kind: 'FragmentDefinition',
+      name: { kind: 'Name', value: 'PostFields' },
+      typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Post' } },
+      selectionSet: {
+        kind: 'SelectionSet',
+        selections: [
+          { kind: 'Field', name: { kind: 'Name', value: '_id' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'content' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'imageUrl' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+          {
+            kind: 'Field',
+            name: { kind: 'Name', value: 'creator' },
+            selectionSet: {
+              kind: 'SelectionSet',
               selections: [
                 { kind: 'Field', name: { kind: 'Name', value: '_id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'title' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'content' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'imageUrl' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'creator' },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: '_id' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'name' } }
-                    ]
-                  }
-                }
+                { kind: 'Field', name: { kind: 'Name', value: 'name' } }
               ]
             }
           }
@@ -474,6 +525,50 @@ export const GetPostDocument = {
     }
   ]
 } as unknown as DocumentNode<GetPostQuery, GetPostQueryVariables>;
+export const GetUserDocument = {
+  kind: 'Document',
+  definitions: [
+    {
+      kind: 'OperationDefinition',
+      operation: 'query',
+      name: { kind: 'Name', value: 'GetUser' },
+      variableDefinitions: [
+        {
+          kind: 'VariableDefinition',
+          variable: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
+          type: {
+            kind: 'NonNullType',
+            type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } }
+          }
+        }
+      ],
+      selectionSet: {
+        kind: 'SelectionSet',
+        selections: [
+          {
+            kind: 'Field',
+            name: { kind: 'Name', value: 'user' },
+            arguments: [
+              {
+                kind: 'Argument',
+                name: { kind: 'Name', value: 'id' },
+                value: { kind: 'Variable', name: { kind: 'Name', value: 'id' } }
+              }
+            ],
+            selectionSet: {
+              kind: 'SelectionSet',
+              selections: [
+                { kind: 'Field', name: { kind: 'Name', value: '_id' } },
+                { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                { kind: 'Field', name: { kind: 'Name', value: 'status' } }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+} as unknown as DocumentNode<GetUserQuery, GetUserQueryVariables>;
 export const CreatePostDocument = {
   kind: 'Document',
   definitions: [
@@ -506,24 +601,32 @@ export const CreatePostDocument = {
             ],
             selectionSet: {
               kind: 'SelectionSet',
+              selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'PostFields' } }]
+            }
+          }
+        ]
+      }
+    },
+    {
+      kind: 'FragmentDefinition',
+      name: { kind: 'Name', value: 'PostFields' },
+      typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Post' } },
+      selectionSet: {
+        kind: 'SelectionSet',
+        selections: [
+          { kind: 'Field', name: { kind: 'Name', value: '_id' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'content' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'imageUrl' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+          {
+            kind: 'Field',
+            name: { kind: 'Name', value: 'creator' },
+            selectionSet: {
+              kind: 'SelectionSet',
               selections: [
                 { kind: 'Field', name: { kind: 'Name', value: '_id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'title' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'content' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'imageUrl' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'creator' },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: '_id' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'name' } }
-                    ]
-                  }
-                }
+                { kind: 'Field', name: { kind: 'Name', value: 'name' } }
               ]
             }
           }
@@ -577,24 +680,32 @@ export const UpdatePostDocument = {
             ],
             selectionSet: {
               kind: 'SelectionSet',
+              selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'PostFields' } }]
+            }
+          }
+        ]
+      }
+    },
+    {
+      kind: 'FragmentDefinition',
+      name: { kind: 'Name', value: 'PostFields' },
+      typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Post' } },
+      selectionSet: {
+        kind: 'SelectionSet',
+        selections: [
+          { kind: 'Field', name: { kind: 'Name', value: '_id' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'content' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'imageUrl' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+          {
+            kind: 'Field',
+            name: { kind: 'Name', value: 'creator' },
+            selectionSet: {
+              kind: 'SelectionSet',
               selections: [
                 { kind: 'Field', name: { kind: 'Name', value: '_id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'title' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'content' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'imageUrl' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'creator' },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: '_id' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'name' } }
-                    ]
-                  }
-                }
+                { kind: 'Field', name: { kind: 'Name', value: 'name' } }
               ]
             }
           }

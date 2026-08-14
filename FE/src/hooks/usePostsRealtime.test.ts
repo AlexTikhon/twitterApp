@@ -35,7 +35,6 @@ describe('usePostsRealtime', () => {
       action: 'create',
       post: {
         _id: 'post-id',
-        title: 'Post',
         content: 'Content',
         imageUrl: '/images/post.png',
         createdAt: '2026-08-09T12:00:00.000Z',

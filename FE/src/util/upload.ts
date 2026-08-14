@@ -1,17 +1,19 @@
 import { IMAGE_UPLOAD_URL } from '../config';
-import type { GraphqlRequestError } from './graphql';
+import { getSession } from '../session';
 
 type ImageUploadResponse = {
   uploadId: string;
 };
 
-export const uploadImage = async (file: File, token?: string | null): Promise<string> => {
+type UploadError = Error & { statusCode?: number };
+
+export const uploadImage = async (file: File): Promise<string> => {
   const formData = new FormData();
   formData.append('image', file);
 
   const response = await fetch(IMAGE_UPLOAD_URL, {
     method: 'POST',
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    headers: getSession()?.token ? { Authorization: `Bearer ${getSession()?.token}` } : {},
     body: formData
   });
   const payload = (await response.json()) as Partial<ImageUploadResponse> & {
@@ -19,7 +21,7 @@ export const uploadImage = async (file: File, token?: string | null): Promise<st
   };
 
   if (!response.ok || !payload.uploadId) {
-    const error = new Error(payload.message || 'Image upload failed.') as GraphqlRequestError;
+    const error = new Error(payload.message || 'Image upload failed.') as UploadError;
     error.statusCode = response.status;
     throw error;
   }

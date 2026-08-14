@@ -23,9 +23,9 @@ const modal = (props: ModalProps) => {
   }
 
   return ReactDOM.createPortal(
-    <div className="modal">
+    <div className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
       <header className="modal__header">
-        <h1>{props.title}</h1>
+        <h1 id="modal-title">{props.title}</h1>
       </header>
       <div className="modal__content">{props.children}</div>
       <div className="modal__actions">

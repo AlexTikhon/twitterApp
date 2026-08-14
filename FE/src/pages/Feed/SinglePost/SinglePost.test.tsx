@@ -1,55 +1,54 @@
+import { MockedProvider, type MockedResponse } from '@apollo/client/testing';
+import { GraphQLError } from 'graphql';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
+import { GetPostDocument } from '../../../generated/graphql';
 import SinglePost from './SinglePost';
 
-const graphqlMock = vi.hoisted(() => ({
-  request: vi.fn(),
-  isUnauthorized: vi.fn(() => false)
-}));
-
-vi.mock('../../../util/graphql', () => ({
-  graphqlRequest: graphqlMock.request,
-  isUnauthorizedError: graphqlMock.isUnauthorized
-}));
-
-const renderPostRoute = (initialEntry: string, routePath = '/:postId') =>
+const renderPostRoute = (
+  initialEntry: string,
+  mocks: readonly MockedResponse[] = [],
+  routePath = '/posts/:postId'
+) =>
   render(
-    <MemoryRouter initialEntries={[initialEntry]}>
-      <Routes>
-        <Route path={routePath} element={<SinglePost onLogout={vi.fn()} />} />
-      </Routes>
-    </MemoryRouter>
+    <MockedProvider mocks={mocks}>
+      <MemoryRouter initialEntries={[initialEntry]}>
+        <Routes>
+          <Route path={routePath} element={<SinglePost />} />
+        </Routes>
+      </MemoryRouter>
+    </MockedProvider>
   );
 
 describe('SinglePost', () => {
-  beforeEach(() => {
-    graphqlMock.request.mockReset();
-    graphqlMock.isUnauthorized.mockReset();
-    graphqlMock.isUnauthorized.mockReturnValue(false);
-  });
-
   it('shows a loading state while the post request is pending', () => {
-    graphqlMock.request.mockReturnValue(new Promise(() => {}));
-
-    renderPostRoute('/post-id');
+    renderPostRoute('/posts/post-id', [
+      {
+        request: { query: GetPostDocument, variables: { id: 'post-id' } },
+        delay: 100_000,
+        result: { data: { post: null } }
+      }
+    ]);
 
     expect(screen.getByRole('status')).toHaveTextContent('Loading post...');
   });
 
   it('shows the request error instead of an empty post shell', async () => {
-    graphqlMock.request.mockRejectedValue(new Error('Post not found.'));
-
-    renderPostRoute('/missing-post');
+    renderPostRoute('/posts/missing-post', [
+      {
+        request: { query: GetPostDocument, variables: { id: 'missing-post' } },
+        result: { errors: [new GraphQLError('Post not found.')] }
+      }
+    ]);
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Post not found.');
   });
 
   it('shows an explicit empty state without a route post id', async () => {
-    renderPostRoute('/', '/');
+    renderPostRoute('/', [], '/');
 
     expect(await screen.findByRole('heading', { name: 'Post not found.' })).toBeVisible();
-    expect(graphqlMock.request).not.toHaveBeenCalled();
   });
 });

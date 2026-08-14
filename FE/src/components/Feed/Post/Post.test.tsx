@@ -9,9 +9,10 @@ const renderPost = (canModify: boolean, deleting = false) =>
     <MemoryRouter>
       <Post
         id="post-id"
+        authorId="user-id"
         author="Ada"
         date="August 9"
-        title="Architecture"
+        content="Architecture should stay understandable."
         canModify={canModify}
         deleting={deleting}
         onStartEdit={vi.fn()}
@@ -24,7 +25,8 @@ describe('Post permissions', () => {
   it('does not render mutation actions for another user post', () => {
     renderPost(false);
 
-    expect(screen.getByRole('link', { name: 'View' })).toHaveAttribute('href', '/post-id');
+    expect(screen.getByRole('link', { name: 'View' })).toHaveAttribute('href', '/posts/post-id');
+    expect(screen.getByRole('link', { name: 'Ada' })).toHaveAttribute('href', '/users/user-id');
     expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
   });

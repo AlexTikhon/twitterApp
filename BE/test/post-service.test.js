@@ -4,7 +4,6 @@ const { test } = require('node:test');
 const { PostService } = require('../services/post-service');
 
 const postInput = {
-  title: 'Service post',
   content: 'Created by a post service unit test.',
   imageUploadId: '507f1f77bcf86cd799439013'
 };
@@ -80,13 +79,38 @@ test('post creation releases upload metadata and emits realtime after commit', a
   assert.deepEqual(events, ['database-write', 'commit', 'metadata-release', 'realtime']);
 });
 
+test('post creation does not require or consume an image upload', async () => {
+  let consumed = false;
+  let createdData;
+  const service = createService({
+    postRepository: {
+      create: async (data) => {
+        createdData = data;
+        return { _id: 'post-id' };
+      }
+    },
+    imageUploadService: {
+      consume: async () => {
+        consumed = true;
+      }
+    }
+  });
+
+  await service.create('507f1f77bcf86cd799439011', {
+    content: 'A text-only post.',
+    imageUploadId: null
+  });
+
+  assert.equal(consumed, false);
+  assert.equal(createdData.imageUrl, null);
+});
+
 test('post update preserves the current image when the transaction rolls back', async () => {
   const userId = '507f1f77bcf86cd799439011';
   const deletedImages = [];
   const databaseError = new Error('database update failed');
   const existingPost = {
     _id: 'post-id',
-    title: 'Existing title',
     content: 'Existing content',
     imageUrl: '/images/current.png',
     creator: { toString: () => userId }
@@ -108,4 +132,33 @@ test('post update preserves the current image when the transaction rolls back', 
     databaseError
   );
   assert.deepEqual(deletedImages, []);
+});
+
+test('post update removes an optional image after the transaction commits', async () => {
+  const userId = '507f1f77bcf86cd799439011';
+  const deletedImages = [];
+  const existingPost = {
+    _id: '507f1f77bcf86cd799439012',
+    content: 'Existing content',
+    imageUrl: '/images/current.png',
+    creator: { toString: () => userId }
+  };
+  const service = createService({
+    postRepository: {
+      findById: async () => existingPost,
+      save: async (post) => post
+    },
+    imageStorage: {
+      delete: async (imageUrl) => deletedImages.push(imageUrl)
+    }
+  });
+
+  const result = await service.update(userId, existingPost._id, {
+    content: 'Text-only after update.',
+    imageUploadId: null,
+    removeImage: true
+  });
+
+  assert.equal(result.imageUrl, null);
+  assert.deepEqual(deletedImages, ['/images/current.png']);
 });

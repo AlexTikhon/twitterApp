@@ -32,12 +32,12 @@ test('GraphQL complexity rule rejects oversized selection sets', () => {
       posts(first: 1) {
         totalItems
         pageInfo { endCursor hasNextPage }
-        posts { _id title content imageUrl }
+        posts { _id content imageUrl createdAt updatedAt }
       }
     }
   `);
   const errors = validate(schema, document, [createComplexityLimitRule(5)]);
 
   assert.equal(errors.length, 1);
-  assert.match(errors[0].message, /Query complexity 10 exceeds the maximum of 5/);
+  assert.match(errors[0].message, /Query complexity 11 exceeds the maximum of 5/);
 });

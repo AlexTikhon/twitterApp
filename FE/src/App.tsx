@@ -1,5 +1,6 @@
 // Coordinates authentication state and switches between auth routes and feed routes.
-import React, { Fragment, useCallback, useState } from 'react';
+import { useMutation } from '@apollo/client';
+import React, { Fragment, useCallback, useEffect, useState } from 'react';
 import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 
 import Layout from './components/Layout/Layout';
@@ -10,19 +11,20 @@ import MobileNavigation from './components/Navigation/MobileNavigation/MobileNav
 import ErrorHandler from './components/ErrorHandler/ErrorHandler';
 import FeedPage from './pages/Feed/Feed';
 import SinglePostPage from './pages/Feed/SinglePost/SinglePost';
+import UserProfilePage from './pages/Profile/UserProfile';
 import LoginPage from './pages/Auth/Login';
 import SignupPage from './pages/Auth/Signup';
 import { CreateUserDocument, LoginDocument } from './generated/graphql';
 import { useSession } from './hooks/useSession';
 import { clearSession, saveSession } from './session';
-import { graphqlRequest } from './util/graphql';
-import './App.css';
+import { apolloClient } from './apollo';
 
-type AuthData = {
+type LoginData = {
   email: string;
   password: string;
-  name?: string;
 };
+
+type SignupData = LoginData & { name: string };
 
 const App = () => {
   const navigate = useNavigate();
@@ -31,10 +33,18 @@ const App = () => {
   const [showMobileNav, setShowMobileNav] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  const [login] = useMutation(LoginDocument);
+  const [createUser] = useMutation(CreateUserDocument);
 
   const logoutHandler = useCallback(() => {
     clearSession();
   }, []);
+
+  useEffect(() => {
+    if (!session) {
+      void apolloClient.clearStore();
+    }
+  }, [session]);
 
   // Opens or closes the mobile navigation and matching backdrop together.
   const mobileNavHandler = (isOpen: boolean) => {
@@ -50,38 +60,33 @@ const App = () => {
   };
 
   // Sends login credentials to GraphQL and stores the returned session.
-  const loginHandler = async (event: React.FormEvent<HTMLFormElement>, authData: AuthData) => {
+  const loginHandler = async (event: React.FormEvent<HTMLFormElement>, authData: LoginData) => {
     event.preventDefault();
     setAuthLoading(true);
     try {
-      const data = await graphqlRequest({
-        document: LoginDocument,
-        variables: authData
-      });
+      const { data } = await login({ variables: authData });
+      if (!data) {
+        throw new Error('Login returned no data.');
+      }
 
       setAuthLoading(false);
       saveSession(data.login.token, data.login.userId, data.login.expiresIn);
     } catch (err) {
-      console.log(err);
       setAuthLoading(false);
       setError(err instanceof Error ? err : new Error('Login failed.'));
     }
   };
 
   // Creates a user account and sends the user back to the login route.
-  const signupHandler = async (event: React.FormEvent<HTMLFormElement>, authData: AuthData) => {
+  const signupHandler = async (event: React.FormEvent<HTMLFormElement>, authData: SignupData) => {
     event.preventDefault();
     setAuthLoading(true);
     try {
-      await graphqlRequest({
-        document: CreateUserDocument,
-        variables: authData
-      });
+      await createUser({ variables: authData });
       clearSession();
       setAuthLoading(false);
       navigate('/');
     } catch (err) {
-      console.log(err);
       setAuthLoading(false);
       setError(err instanceof Error ? err : new Error('Signup failed.'));
     }
@@ -113,7 +118,8 @@ const App = () => {
             <FeedPage userId={session.userId} token={session.token} onLogout={logoutHandler} />
           }
         />
-        <Route path="/:postId" element={<SinglePostPage onLogout={logoutHandler} />} />
+        <Route path="/posts/:postId" element={<SinglePostPage />} />
+        <Route path="/users/:userId" element={<UserProfilePage currentUserId={session.userId} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     );
@@ -141,8 +147,9 @@ const App = () => {
             isAuth={Boolean(session)}
           />
         }
-      />
-      {routes}
+      >
+        {routes}
+      </Layout>
     </Fragment>
   );
 };

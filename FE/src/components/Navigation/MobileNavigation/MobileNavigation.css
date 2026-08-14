@@ -6,7 +6,7 @@
   width: 30rem;
   max-width: 90%;
   background: white;
-  box-shadow: 1px 0 8px rbga(0, 0, 0, 0.26);
+  box-shadow: 1px 0 8px rgba(0, 0, 0, 0.26);
   transition: transform 0.3s ease-out;
   transform: translateX(-100%);
   z-index: 200;

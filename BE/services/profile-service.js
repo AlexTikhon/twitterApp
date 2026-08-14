@@ -1,5 +1,5 @@
 const { createError } = require('../domain/errors');
-const { validateStatus } = require('../domain/validation');
+const { validateObjectId, validateStatus } = require('../domain/validation');
 
 class ProfileService {
   constructor({ userRepository }) {
@@ -7,6 +7,7 @@ class ProfileService {
   }
 
   async getUser(userId) {
+    validateObjectId(userId, 'user id');
     const user = await this.userRepository.findById(userId);
     if (!user) {
       throw createError('User not found.', 404);

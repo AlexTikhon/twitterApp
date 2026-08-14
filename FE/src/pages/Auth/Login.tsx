@@ -51,7 +51,11 @@ const Login = (props: LoginProps) => {
   const formIsValid = Object.values(loginForm).every((field) => field.valid);
 
   // Updates one login field and recalculates the form validity.
-  const inputChangeHandler = (input: LoginFieldId, value: string) => {
+  const inputChangeHandler = (input: string, value: string) => {
+    if (input !== 'email' && input !== 'password') {
+      return;
+    }
+
     setLoginForm((prevLoginForm) => {
       let isValid = true;
       for (const validator of prevLoginForm[input].validators) {

@@ -1,24 +1,16 @@
-// Owns the timeline UI, GraphQL feed operations, and realtime socket updates.
-import React, { Fragment, useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useState } from 'react';
 
 import Button from '../../components/Button/Button';
-import FeedEdit from '../../components/Feed/FeedEdit/FeedEdit';
-import type { PostEditorData } from '../../components/Feed/FeedEdit/FeedEdit';
+import ErrorHandler from '../../components/ErrorHandler/ErrorHandler';
+import FeedEdit, { type PostEditorData } from '../../components/Feed/FeedEdit/FeedEdit';
 import FeedList from '../../components/Feed/FeedList/FeedList';
 import Input from '../../components/Form/Input/Input';
-import ErrorHandler from '../../components/ErrorHandler/ErrorHandler';
-import {
-  CreatePostDocument,
-  DeletePostDocument,
-  GetPostsDocument,
-  GetStatusDocument,
-  UpdatePostDocument,
-  UpdateStatusDocument
-} from '../../generated/graphql';
+import { useCurrentUserStatus } from '../../hooks/useCurrentUserStatus';
+import { useFeedPosts } from '../../hooks/useFeedPosts';
+import { useInfiniteScroll } from '../../hooks/useInfiniteScroll';
+import { usePostMutations } from '../../hooks/usePostMutations';
 import { usePostsRealtime } from '../../hooks/usePostsRealtime';
-import { graphqlRequest, isUnauthorizedError } from '../../util/graphql';
-import { uploadImage } from '../../util/upload';
-import type { FeedPost, PostsRealtimeEvent } from './types';
+import type { FeedPost } from './types';
 import './Feed.css';
 
 type FeedProps = {
@@ -27,426 +19,120 @@ type FeedProps = {
   onLogout: () => void;
 };
 
-type FeedState = {
-  isEditing: boolean;
-  posts: readonly FeedPost[];
-  editPost: FeedPost | null;
-  status: string;
-  cursorHistory: readonly (string | null)[];
-  endCursor: string | null;
-  hasNextPage: boolean;
-  postsLoading: boolean;
-  editLoading: boolean;
-  deletingPostId: string | null;
-  error: Error | null;
-};
+const asError = (error: unknown, fallback: string) =>
+  error instanceof Error ? error : new Error(fallback);
 
-const normalizeError = (error: unknown, fallbackMessage: string): Error =>
-  error instanceof Error ? error : new Error(fallbackMessage);
+const Feed = ({ token, userId, onLogout }: FeedProps) => {
+  const feed = useFeedPosts();
+  const profileStatus = useCurrentUserStatus();
+  const postMutations = usePostMutations();
+  const [editorPost, setEditorPost] = useState<FeedPost | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
+  const [error, setError] = useState<Error | null>(null);
+  const sentinelRef = useInfiniteScroll(feed.hasNextPage && !feed.loadingMore, feed.loadMore);
 
-const Feed = (props: FeedProps) => {
-  const { token, userId, onLogout } = props;
-  const deletedPostIds = useRef(new Set<string>());
-  const [feedState, setFeedState] = useState<FeedState>({
-    isEditing: false,
-    posts: [],
-    editPost: null,
-    status: '',
-    cursorHistory: [null],
-    endCursor: null,
-    hasNextPage: false,
-    postsLoading: true,
-    editLoading: false,
-    deletingPostId: null,
-    error: null
-  });
-
-  // Stores a caught request error so the shared error modal can show it.
-  const catchError = useCallback(
-    (error: unknown) => {
-      if (isUnauthorizedError(error)) {
-        onLogout();
-        return;
-      }
-
-      setFeedState((prevState) => ({
-        ...prevState,
-        postsLoading: false,
-        error: normalizeError(error, 'Feed request failed.')
-      }));
-    },
-    [onLogout]
-  );
-
-  // Fetches one cursor page and records the cursors needed to navigate backwards.
-  const fetchPosts = useCallback(
-    async (after: string | null, cursorHistory: readonly (string | null)[]) => {
-      try {
-        const data = await graphqlRequest({
-          document: GetPostsDocument,
-          variables: {
-            page: undefined,
-            limit: undefined,
-            first: 2,
-            after: after || undefined
-          }
-        });
-
-        setFeedState((prevState) => ({
-          ...prevState,
-          posts: data.posts.posts,
-          cursorHistory,
-          endCursor: data.posts.pageInfo.endCursor,
-          hasNextPage: data.posts.pageInfo.hasNextPage,
-          postsLoading: false
-        }));
-      } catch (error) {
-        catchError(error);
-      }
-    },
-    [catchError]
-  );
-
-  // Loads status first, then loads the initial posts page.
-  const loadInitialData = useCallback(async () => {
-    try {
-      const data = await graphqlRequest({
-        document: GetStatusDocument
-      });
-
-      setFeedState((prevState) => ({ ...prevState, status: data.status.status }));
-      // The status query and first posts query are separated to keep the UI responsive.
-      await fetchPosts(null, [null]);
-    } catch (error) {
-      catchError(error);
-    }
-  }, [catchError, fetchPosts]);
-
-  const loadNextPage = async () => {
-    if (!feedState.endCursor || !feedState.hasNextPage) {
-      return;
-    }
-    const cursorHistory = [...feedState.cursorHistory, feedState.endCursor];
-    setFeedState((prevState) => ({
-      ...prevState,
-      postsLoading: true,
-      posts: []
-    }));
-    await fetchPosts(feedState.endCursor, cursorHistory);
-  };
-
-  const loadPreviousPage = async () => {
-    if (feedState.cursorHistory.length <= 1) {
-      return;
-    }
-    const cursorHistory = feedState.cursorHistory.slice(0, -1);
-    const previousCursor = cursorHistory[cursorHistory.length - 1] || null;
-    setFeedState((prevState) => ({ ...prevState, postsLoading: true, posts: [] }));
-    await fetchPosts(previousCursor, cursorHistory);
-  };
-
-  // Persists the edited profile status for the current user.
-  const statusUpdateHandler = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    try {
-      const data = await graphqlRequest({
-        document: UpdateStatusDocument,
-        variables: {
-          status: feedState.status
-        }
-      });
-
-      setFeedState((prevState) => ({
-        ...prevState,
-        status: data.updateStatus.status
-      }));
-    } catch (error) {
-      catchError(error);
-    }
-  };
-
-  // Opens the post editor in create mode.
-  const newPostHandler = () => {
-    setFeedState((prevState) => ({ ...prevState, isEditing: true }));
-  };
-
-  // Inserts a socket-created post into the visible list when appropriate.
-  const addPost = useCallback((post: FeedPost) => {
-    setFeedState((prevState) => {
-      const postAlreadyExists = prevState.posts.some(
-        (existingPost) => existingPost._id === post._id
-      );
-
-      if (postAlreadyExists) {
-        return prevState;
-      }
-
-      // Only the first page inserts the new item immediately into the visible list.
-      if (prevState.cursorHistory.length !== 1) {
-        return prevState;
-      }
-
-      return {
-        ...prevState,
-        posts: [post, ...prevState.posts].slice(0, 2)
-      };
-    });
+  const reportError = useCallback((caught: unknown) => {
+    setError(asError(caught, 'Feed request failed.'));
   }, []);
 
-  // Replaces a visible post after an edit event or edit mutation succeeds.
-  const updatePost = useCallback((post: FeedPost) => {
-    setFeedState((prevState) => {
-      const postIndex = prevState.posts.findIndex((existingPost) => existingPost._id === post._id);
-
-      if (postIndex < 0) {
-        return prevState;
-      }
-
-      const updatedPosts = [...prevState.posts];
-      updatedPosts[postIndex] = post;
-
-      return {
-        ...prevState,
-        posts: updatedPosts
-      };
-    });
-  }, []);
-
-  // Removes a post once and clears its pending deletion state.
-  const removePost = useCallback((postId: string) => {
-    setFeedState((prevState) => {
-      if (deletedPostIds.current.has(postId)) {
-        return { ...prevState, deletingPostId: null };
-      }
-
-      deletedPostIds.current.add(postId);
-      const postExists = prevState.posts.some((post) => post._id === postId);
-
-      if (!postExists) {
-        return { ...prevState, deletingPostId: null };
-      }
-
-      return {
-        ...prevState,
-        posts: prevState.posts.filter((post) => post._id !== postId),
-        deletingPostId: null
-      };
-    });
-  }, []);
-
-  const handleRealtimeEvent = useCallback(
-    (event: PostsRealtimeEvent) => {
-      if (event.action === 'create') {
-        if (feedState.cursorHistory.length === 1) {
-          void fetchPosts(null, [null]);
-        } else {
-          addPost(event.post);
-        }
-        return;
-      }
-      if (event.action === 'update') {
-        updatePost(event.post);
-        return;
-      }
-
-      removePost(event.post._id);
-      const currentCursor = feedState.cursorHistory[feedState.cursorHistory.length - 1] || null;
-      void fetchPosts(currentCursor, feedState.cursorHistory);
-    },
-    [addPost, feedState.cursorHistory, fetchPosts, removePost, updatePost]
-  );
-
-  // Opens the post editor with the selected post prefilled.
-  const startEditPostHandler = (postId: string) => {
-    setFeedState((prevState) => {
-      const loadedPost = prevState.posts.find((p) => p._id === postId) || null;
-
-      return {
-        ...prevState,
-        isEditing: true,
-        editPost: loadedPost
-      };
-    });
-  };
-
-  // Closes the post editor without saving changes.
-  const cancelEditHandler = () => {
-    setFeedState((prevState) => ({
-      ...prevState,
-      isEditing: false,
-      editPost: null
-    }));
-  };
-
-  // Creates or updates a post using the current editor payload.
-  const finishEditHandler = async (postData: PostEditorData) => {
-    const activeEditPost = feedState.editPost;
-    const wasEditing = !!activeEditPost;
-
-    setFeedState((prevState) => ({
-      ...prevState,
-      editLoading: true
-    }));
-
-    try {
-      const imageUploadId = postData.image ? await uploadImage(postData.image, token) : null;
-      const postInput = {
-        title: postData.title,
-        content: postData.content,
-        imageUploadId
-      };
-
-      const post = activeEditPost
-        ? (
-            await graphqlRequest({
-              document: UpdatePostDocument,
-              variables: { id: activeEditPost._id, postInput }
-            })
-          ).updatePost
-        : (
-            await graphqlRequest({
-              document: CreatePostDocument,
-              variables: { postInput }
-            })
-          ).createPost;
-
-      setFeedState((prevState) => {
-        const updatedPosts = [...prevState.posts];
-        if (activeEditPost) {
-          const postIndex = prevState.posts.findIndex((p) => p._id === activeEditPost._id);
-          if (postIndex >= 0) {
-            updatedPosts[postIndex] = post;
-          }
-        }
-        return {
-          ...prevState,
-          posts: updatedPosts,
-          isEditing: false,
-          editPost: null,
-          editLoading: false
-        };
-      });
-
-      if (!wasEditing) {
-        addPost(post);
-      } else {
-        updatePost(post);
-      }
-    } catch (err) {
-      console.log(err);
-      if (isUnauthorizedError(err)) {
-        onLogout();
-        return;
-      }
-
-      setFeedState((prevState) => ({
-        ...prevState,
-        isEditing: false,
-        editPost: null,
-        editLoading: false,
-        error: normalizeError(err, 'Could not save post.')
-      }));
+  useEffect(() => {
+    if (feed.error || profileStatus.error) {
+      reportError(feed.error || profileStatus.error);
     }
-  };
-
-  // Mirrors the status input value into component state.
-  const statusInputChangeHandler = (input: string, value: string) => {
-    if (input !== 'status') {
-      return;
-    }
-    setFeedState((prevState) => ({ ...prevState, [input]: value }));
-  };
-
-  // Deletes a post through GraphQL and removes it from local state.
-  const deletePostHandler = async (postId: string) => {
-    if (feedState.deletingPostId) {
-      return;
-    }
-
-    setFeedState((prevState) => ({ ...prevState, deletingPostId: postId }));
-    try {
-      await graphqlRequest({
-        document: DeletePostDocument,
-        variables: {
-          id: postId
-        }
-      });
-      removePost(postId);
-    } catch (err) {
-      console.log(err);
-      if (isUnauthorizedError(err)) {
-        onLogout();
-        return;
-      }
-
-      setFeedState((prevState) => ({
-        ...prevState,
-        deletingPostId: null,
-        error: normalizeError(err, 'Could not delete post.')
-      }));
-    }
-  };
-
-  // Clears the feed-level error modal state.
-  const errorHandler = () => {
-    setFeedState((prevState) => ({ ...prevState, error: null }));
-  };
+  }, [feed.error, profileStatus.error, reportError]);
 
   usePostsRealtime({
     token,
-    onEvent: handleRealtimeEvent,
-    onError: catchError,
+    onEvent: feed.applyRealtimeEvent,
+    onError: reportError,
     onUnauthorized: onLogout
   });
 
-  // Loads profile and feed data when the authenticated feed mounts.
-  useEffect(() => {
-    void loadInitialData();
-  }, [loadInitialData]);
+  const finishEdit = async (postData: PostEditorData) => {
+    try {
+      await postMutations.savePost(postData, editorPost?._id);
+      setIsEditing(false);
+      setEditorPost(null);
+    } catch (caught) {
+      reportError(caught);
+    }
+  };
 
-  // Renders the status form, editor modal, loading state, and paginated posts.
+  const deletePost = async (postId: string) => {
+    if (deletingPostId) {
+      return;
+    }
+
+    setDeletingPostId(postId);
+    try {
+      await postMutations.removePost(postId);
+    } catch (caught) {
+      reportError(caught);
+    } finally {
+      setDeletingPostId(null);
+    }
+  };
+
+  const updateStatus = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    try {
+      await profileStatus.saveStatus();
+    } catch (caught) {
+      reportError(caught);
+    }
+  };
+
   return (
     <Fragment>
-      <ErrorHandler error={feedState.error} onHandle={errorHandler} />
+      <ErrorHandler error={error} onHandle={() => setError(null)} />
       <FeedEdit
-        editing={feedState.isEditing}
-        selectedPost={feedState.editPost}
-        loading={feedState.editLoading}
-        onCancelEdit={cancelEditHandler}
-        onFinishEdit={finishEditHandler}
+        editing={isEditing}
+        selectedPost={editorPost}
+        loading={postMutations.saving}
+        onCancelEdit={() => {
+          setIsEditing(false);
+          setEditorPost(null);
+        }}
+        onFinishEdit={finishEdit}
       />
-      <section className="feed__status">
-        <form onSubmit={statusUpdateHandler}>
+      <section className="feed__status" aria-label="Profile status">
+        <form onSubmit={updateStatus}>
           <Input
             id="status"
             type="text"
+            ariaLabel="Your profile status"
             placeholder="Your status"
             control="input"
-            onChange={statusInputChangeHandler}
-            value={feedState.status}
+            maxLength={160}
+            onChange={(_input, value) => profileStatus.setStatus(value)}
+            value={profileStatus.status}
           />
-          <Button mode="flat" type="submit">
+          <Button mode="flat" type="submit" loading={profileStatus.loading}>
             Update
           </Button>
         </form>
       </section>
       <section className="feed__control">
-        <Button mode="raised" design="accent" onClick={newPostHandler}>
+        <Button mode="raised" design="accent" onClick={() => setIsEditing(true)}>
           New Post
         </Button>
       </section>
-      <section className="feed">
+      <section className="feed" aria-label="Post feed">
         <FeedList
-          posts={feedState.posts}
-          loading={feedState.postsLoading}
+          posts={feed.posts}
+          loading={feed.loading}
           userId={userId}
-          hasPreviousPage={feedState.cursorHistory.length > 1}
-          hasNextPage={feedState.hasNextPage}
-          deletingPostId={feedState.deletingPostId}
-          onPreviousPage={() => void loadPreviousPage()}
-          onNextPage={() => void loadNextPage()}
-          onEdit={startEditPostHandler}
-          onDelete={(postId) => void deletePostHandler(postId)}
+          hasNextPage={feed.hasNextPage}
+          loadingMore={feed.loadingMore}
+          deletingPostId={deletingPostId}
+          sentinelRef={sentinelRef}
+          onLoadMore={() => void feed.loadMore()}
+          onEdit={(postId) => {
+            setEditorPost(feed.posts.find((post) => post._id === postId) || null);
+            setIsEditing(true);
+          }}
+          onDelete={(postId) => void deletePost(postId)}
         />
       </section>
     </Fragment>

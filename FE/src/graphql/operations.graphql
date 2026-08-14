@@ -24,70 +24,54 @@ mutation UpdateStatus($status: String!) {
   }
 }
 
-query GetPosts($page: Int, $limit: Int, $first: Int, $after: String) {
-  posts(page: $page, limit: $limit, first: $first, after: $after) {
+fragment PostFields on Post {
+  _id
+  content
+  imageUrl
+  createdAt
+  updatedAt
+  creator {
+    _id
+    name
+  }
+}
+
+query GetPosts($first: Int, $after: String, $creatorId: ID) {
+  posts(first: $first, after: $after, creatorId: $creatorId) {
     totalItems
     pageInfo {
       endCursor
       hasNextPage
     }
     posts {
-      _id
-      title
-      content
-      imageUrl
-      createdAt
-      updatedAt
-      creator {
-        _id
-        name
-      }
+      ...PostFields
     }
   }
 }
 
 query GetPost($id: ID!) {
   post(id: $id) {
+    ...PostFields
+  }
+}
+
+query GetUser($id: ID!) {
+  user(id: $id) {
     _id
-    title
-    content
-    imageUrl
-    createdAt
-    updatedAt
-    creator {
-      _id
-      name
-    }
+    name
+    status
   }
 }
 
 mutation CreatePost($postInput: PostInputData!) {
   createPost(postInput: $postInput) {
-    _id
-    title
-    content
-    imageUrl
-    createdAt
-    updatedAt
-    creator {
-      _id
-      name
-    }
+    ...PostFields
   }
 }
 
 mutation UpdatePost($id: ID!, $postInput: PostInputData!) {
   updatePost(id: $id, postInput: $postInput) {
-    _id
-    title
-    content
-    imageUrl
-    createdAt
-    updatedAt
-    creator {
-      _id
-      name
-    }
+    ...PostFields
   }
 }
 

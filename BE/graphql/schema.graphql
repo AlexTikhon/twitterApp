@@ -1,6 +1,5 @@
 type User {
   _id: ID!
-  email: String!
   name: String!
   status: String!
   createdAt: String!
@@ -9,9 +8,8 @@ type User {
 
 type Post {
   _id: ID!
-  title: String!
   content: String!
-  imageUrl: String!
+  imageUrl: String
   creator: User!
   createdAt: String!
   updatedAt: String!
@@ -45,19 +43,15 @@ input UserInputData {
 }
 
 input PostInputData {
-  title: String!
   content: String!
   imageUploadId: ID
+  removeImage: Boolean = false
 }
 
 type RootQuery {
-  posts(
-    page: Int @deprecated(reason: "Use first/after cursor pagination.")
-    limit: Int @deprecated(reason: "Use first/after cursor pagination.")
-    first: Int
-    after: String
-  ): PostsData!
+  posts(first: Int, after: String, creatorId: ID): PostsData!
   post(id: ID!): Post!
+  user(id: ID!): User!
   status: StatusData!
 }
 

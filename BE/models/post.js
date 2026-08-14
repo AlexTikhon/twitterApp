@@ -1,25 +1,18 @@
-// Stores the feed entries shown in the timeline and single-post pages.
 const mongoose = require('mongoose');
 
 const { Schema } = mongoose;
 
 const postSchema = new Schema(
   {
-    title: {
-      type: String,
-      required: true,
-      trim: true,
-      maxlength: 120
-    },
     content: {
       type: String,
       required: true,
       trim: true,
-      maxlength: 5000
+      maxlength: 500
     },
     imageUrl: {
       type: String,
-      default: ''
+      default: null
     },
     creator: {
       type: Schema.Types.ObjectId,
@@ -32,7 +25,7 @@ const postSchema = new Schema(
   }
 );
 
-postSchema.index({ createdAt: -1 });
-postSchema.index({ creator: 1, createdAt: -1 });
+postSchema.index({ createdAt: -1, _id: -1 });
+postSchema.index({ creator: 1, createdAt: -1, _id: -1 });
 
 module.exports = mongoose.model('Post', postSchema);

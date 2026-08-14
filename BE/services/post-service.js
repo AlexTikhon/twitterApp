@@ -1,10 +1,6 @@
 const { decodeCursor, encodeCursor } = require('../domain/cursor');
 const { createError } = require('../domain/errors');
-const {
-  getBoundedPagination,
-  validateObjectId,
-  validatePostInput
-} = require('../domain/validation');
+const { validateObjectId, validatePostInput } = require('../domain/validation');
 
 class PostService {
   constructor({
@@ -25,44 +21,20 @@ class PostService {
     this.pagination = pagination;
   }
 
-  async list({ page, limit, first, after }) {
-    if (first !== undefined || after !== undefined) {
-      return this.listByCursor(first, after);
-    }
-
-    const { currentPage, perPage } = getBoundedPagination(
-      page,
-      limit,
-      this.pagination.defaultPageSize,
-      this.pagination.maxPageSize
-    );
-    const [totalItems, posts] = await Promise.all([
-      this.postRepository.countAll(),
-      this.postRepository.findPage({
-        skip: (currentPage - 1) * perPage,
-        limit: perPage
-      })
-    ]);
-
-    return {
-      posts,
-      totalItems,
-      pageInfo: {
-        endCursor: posts.length > 0 ? encodeCursor(posts.at(-1)._id) : null,
-        hasNextPage: currentPage * perPage < totalItems
-      }
-    };
-  }
-
-  async listByCursor(first = this.pagination.defaultPageSize, after) {
+  async list({ first = this.pagination.defaultPageSize, after, creatorId }) {
     const requestedLimit = Number(first);
     if (!Number.isInteger(requestedLimit) || requestedLimit <= 0) {
       throw createError('first must be a positive integer.', 400);
     }
 
+    if (creatorId) {
+      validateObjectId(creatorId, 'creator id');
+    }
+
     const perPage = Math.min(requestedLimit, this.pagination.maxPageSize);
     const loadedPosts = await this.postRepository.findCursorPage({
-      afterId: after ? decodeCursor(after) : null,
+      after: after ? decodeCursor(after) : null,
+      creatorId: creatorId || null,
       limit: perPage
     });
     const hasNextPage = loadedPosts.length > perPage;
@@ -70,9 +42,9 @@ class PostService {
 
     return {
       posts,
-      totalItems: await this.postRepository.countAll(),
+      totalItems: await this.postRepository.count({ creatorId }),
       pageInfo: {
-        endCursor: posts.length > 0 ? encodeCursor(posts.at(-1)._id) : null,
+        endCursor: posts.length > 0 ? encodeCursor(posts.at(-1)) : null,
         hasNextPage
       }
     };
@@ -90,9 +62,6 @@ class PostService {
 
   async create(userId, postInput) {
     const input = validatePostInput(postInput);
-    if (!input.imageUploadId) {
-      throw createError('No image upload provided.', 422);
-    }
 
     const createdPost = await this.runInTransaction(async (session) => {
       const user = await this.userRepository.findById(userId, { session, select: '_id' });
@@ -100,19 +69,22 @@ class PostService {
         throw createError('User not found.', 404);
       }
 
-      const upload = await this.imageUploadService.consume(input.imageUploadId, userId, session);
+      const upload = input.imageUploadId
+        ? await this.imageUploadService.consume(input.imageUploadId, userId, session)
+        : null;
       return this.postRepository.create(
         {
-          title: input.title,
           content: input.content,
-          imageUrl: upload.imageUrl,
+          imageUrl: upload?.imageUrl || null,
           creator: userId
         },
         { session }
       );
     });
 
-    await this.imageUploadService.releaseMetadata(input.imageUploadId);
+    if (input.imageUploadId) {
+      await this.imageUploadService.releaseMetadata(input.imageUploadId);
+    }
     await this.postRealtime.emit('create', createdPost._id);
     return createdPost;
   }
@@ -132,19 +104,18 @@ class PostService {
       if (input.imageUploadId) {
         const upload = await this.imageUploadService.consume(input.imageUploadId, userId, session);
         post.imageUrl = upload.imageUrl;
+      } else if (input.removeImage) {
+        post.imageUrl = null;
       }
 
-      if (!post.imageUrl) {
-        throw createError('No image provided.', 422);
-      }
-
-      post.title = input.title;
       post.content = input.content;
       return this.postRepository.save(post, { session });
     });
 
-    await this.imageUploadService.releaseMetadata(input.imageUploadId);
-    if (updatedPost.imageUrl !== previousImageUrl) {
+    if (input.imageUploadId) {
+      await this.imageUploadService.releaseMetadata(input.imageUploadId);
+    }
+    if (previousImageUrl && updatedPost.imageUrl !== previousImageUrl) {
       await this.imageStorage.delete(previousImageUrl);
     }
     await this.postRealtime.emit('update', updatedPost._id);
@@ -160,7 +131,9 @@ class PostService {
       return post;
     });
 
-    await this.imageStorage.delete(deletedPost.imageUrl);
+    if (deletedPost.imageUrl) {
+      await this.imageStorage.delete(deletedPost.imageUrl);
+    }
     await this.postRealtime.emit('delete', id);
     return true;
   }

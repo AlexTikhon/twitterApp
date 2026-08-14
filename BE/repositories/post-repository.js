@@ -3,18 +3,21 @@ class PostRepository {
     this.Post = PostModel;
   }
 
-  countAll() {
-    return this.Post.countDocuments();
+  count({ creatorId } = {}) {
+    return this.Post.countDocuments(creatorId ? { creator: creatorId } : {});
   }
 
-  findPage({ skip, limit }) {
-    return this.Post.find().sort({ createdAt: -1 }).skip(skip).limit(limit);
-  }
+  findCursorPage({ after, creatorId, limit }) {
+    const filter = creatorId ? { creator: creatorId } : {};
+    if (after) {
+      filter.$or = [
+        { createdAt: { $lt: after.createdAt } },
+        { createdAt: after.createdAt, _id: { $lt: after.id } }
+      ];
+    }
 
-  findCursorPage({ afterId, limit }) {
-    const filter = afterId ? { _id: { $lt: afterId } } : {};
     return this.Post.find(filter)
-      .sort({ _id: -1 })
+      .sort({ createdAt: -1, _id: -1 })
       .limit(limit + 1);
   }
 

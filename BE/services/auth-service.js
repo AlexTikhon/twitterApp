@@ -51,7 +51,7 @@ class AuthService {
     }
 
     return {
-      token: jwt.sign({ email: user.email, userId: user._id.toString() }, this.jwtSecret, {
+      token: jwt.sign({ userId: user._id.toString() }, this.jwtSecret, {
         expiresIn: this.jwtExpiresInSeconds
       }),
       userId: user._id.toString(),

@@ -36,7 +36,7 @@ const filePicker = (props: FilePickerProps) => {
           props.touched ? 'touched' : 'untouched'
         ].join(' ')}
         type="file"
-        accept="image/*"
+        accept="image/png,image/jpeg"
         id={props.id}
         onChange={changeHandler}
         onBlur={props.onBlur}

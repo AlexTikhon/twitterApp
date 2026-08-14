@@ -1,33 +1,37 @@
-// Renders the compact post card used inside the paginated feed list.
-import React from 'react';
+import { Link } from 'react-router-dom';
 
 import Button from '../../Button/Button';
+import Image from '../../Image/Image';
 import './Post.css';
 
 type PostProps = {
   id: string;
+  authorId: string;
   author: string;
   date: string;
-  title: string;
-  image?: string;
-  content?: string;
+  image?: string | null;
+  content: string;
   canModify: boolean;
   deleting?: boolean;
   onStartEdit: () => void;
   onDelete: () => void;
 };
 
-// Renders one feed post summary with view, edit, and delete actions.
-const post = (props: PostProps) => (
+const Post = (props: PostProps) => (
   <article className="post">
     <header className="post__header">
-      <h3 className="post__meta">
-        Posted by {props.author} on {props.date}
-      </h3>
-      <h1 className="post__title">{props.title}</h1>
+      <p className="post__meta">
+        Posted by <Link to={`/users/${props.authorId}`}>{props.author}</Link> on {props.date}
+      </p>
     </header>
+    <p className="post__content">{props.content}</p>
+    {props.image && (
+      <div className="post__image">
+        <Image imageUrl={props.image} alt={`Image attached to ${props.author}'s post`} />
+      </div>
+    )}
     <div className="post__actions">
-      <Button mode="flat" link={props.id}>
+      <Button mode="flat" link={`/posts/${props.id}`}>
         View
       </Button>
       {props.canModify && (
@@ -44,4 +48,4 @@ const post = (props: PostProps) => (
   </article>
 );
 
-export default post;
+export default Post;

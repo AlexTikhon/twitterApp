@@ -1,13 +1,12 @@
 {
   "name": "twitterapp-backend",
   "version": "1.0.0",
-  "description": "Starter backend for mini Twitter app",
+  "description": "Production-style backend for a small Twitter-like learning project",
   "main": "app.js",
   "scripts": {
     "start": "node app.js",
     "dev": "nodemon app.js",
     "start:e2e": "node scripts/start-e2e-server.js",
-    "migrate:remove-user-posts": "node scripts/remove-user-posts.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier . \"../.github/**/*.yml\" \"../*.{json,yml}\" --write --ignore-path ../.prettierignore",

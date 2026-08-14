@@ -7,11 +7,13 @@ type InputProps = {
   id: string;
   control: 'input' | 'textarea';
   label?: string;
+  ariaLabel?: string;
   type?: string;
   required?: boolean;
   value?: string;
   placeholder?: string;
   rows?: string;
+  maxLength?: number;
   valid?: boolean;
   touched?: boolean;
   onChange: (id: string, value: string, files?: FileList | null) => void;
@@ -33,8 +35,10 @@ const input = (props: InputProps) => (
         required={props.required}
         value={props.value}
         placeholder={props.placeholder}
+        aria-label={props.ariaLabel}
         onChange={(e) => props.onChange(props.id, e.target.value, e.target.files)}
         onBlur={props.onBlur}
+        maxLength={props.maxLength}
       />
     )}
     {props.control === 'textarea' && (
@@ -47,8 +51,10 @@ const input = (props: InputProps) => (
         rows={props.rows ? Number(props.rows) : undefined}
         required={props.required}
         value={props.value}
+        aria-label={props.ariaLabel}
         onChange={(e) => props.onChange(props.id, e.target.value)}
         onBlur={props.onBlur}
+        maxLength={props.maxLength}
       />
     )}
   </div>

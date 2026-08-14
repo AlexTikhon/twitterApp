@@ -131,7 +131,7 @@ const loadConfig = (env = process.env) => {
       authMax: readPositiveInteger(env, 'AUTH_RATE_LIMIT_MAX_REQUESTS', 20)
     }),
     posts: Object.freeze({
-      defaultPageSize: 2,
+      defaultPageSize: 10,
       maxPageSize: readPositiveInteger(env, 'POSTS_PAGE_SIZE_LIMIT', 20)
     }),
     graphql: Object.freeze({

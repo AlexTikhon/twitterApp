@@ -58,7 +58,11 @@ const Signup = (props: SignupProps) => {
   const formIsValid = Object.values(signupForm).every((field) => field.valid);
 
   // Updates one signup field and recalculates the form validity.
-  const inputChangeHandler = (input: SignupFieldId, value: string) => {
+  const inputChangeHandler = (input: string, value: string) => {
+    if (input !== 'email' && input !== 'password' && input !== 'name') {
+      return;
+    }
+
     setSignupForm((prevSignupForm) => {
       let isValid = true;
       for (const validator of prevSignupForm[input].validators) {
