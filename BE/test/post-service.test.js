@@ -162,3 +162,101 @@ test('post update removes an optional image after the transaction commits', asyn
   assert.equal(result.imageUrl, null);
   assert.deepEqual(deletedImages, ['/images/current.png']);
 });
+
+test('post update replaces the old image only after persistence commits', async () => {
+  const userId = '507f1f77bcf86cd799439011';
+  const events = [];
+  const existingPost = {
+    _id: '507f1f77bcf86cd799439012',
+    content: 'Existing content',
+    imageUrl: '/images/current.png',
+    creator: { toString: () => userId }
+  };
+  const service = createService({
+    postRepository: {
+      findById: async () => existingPost,
+      save: async (post) => {
+        events.push('database-write');
+        return post;
+      }
+    },
+    runInTransaction: async (work) => {
+      const result = await work({ id: 'session' });
+      events.push('commit');
+      return result;
+    },
+    imageUploadService: {
+      consume: async () => ({ imageUrl: '/images/replacement.png' }),
+      releaseMetadata: async () => events.push('metadata-release')
+    },
+    imageStorage: {
+      delete: async (imageUrl) => events.push(`delete:${imageUrl}`)
+    },
+    postRealtime: {
+      emit: async () => events.push('realtime')
+    }
+  });
+
+  const result = await service.update(userId, existingPost._id, postInput);
+
+  assert.equal(result.imageUrl, '/images/replacement.png');
+  assert.deepEqual(events, [
+    'database-write',
+    'commit',
+    'metadata-release',
+    'delete:/images/current.png',
+    'realtime'
+  ]);
+});
+
+test('post deletion removes its image and emits realtime only after commit', async () => {
+  const userId = '507f1f77bcf86cd799439011';
+  const postId = '507f1f77bcf86cd799439012';
+  const events = [];
+  const existingPost = {
+    _id: postId,
+    imageUrl: '/images/current.png',
+    creator: { toString: () => userId }
+  };
+  const service = createService({
+    postRepository: {
+      findById: async () => existingPost,
+      deleteById: async () => events.push('database-delete')
+    },
+    runInTransaction: async (work) => {
+      const result = await work({ id: 'session' });
+      events.push('commit');
+      return result;
+    },
+    imageStorage: {
+      delete: async (imageUrl) => events.push(`delete:${imageUrl}`)
+    },
+    postRealtime: {
+      emit: async () => events.push('realtime')
+    }
+  });
+
+  assert.equal(await service.delete(userId, postId), true);
+  assert.deepEqual(events, ['database-delete', 'commit', 'delete:/images/current.png', 'realtime']);
+});
+
+test('pagination rejects invalid limits and caps oversized pages', async () => {
+  let repositoryInput;
+  const service = createService({
+    postRepository: {
+      findCursorPage: async (input) => {
+        repositoryInput = input;
+        return [];
+      },
+      count: async () => 0
+    }
+  });
+
+  for (const first of [0, -1, 1.5]) {
+    await assert.rejects(service.list({ first }), /first must be a positive integer/);
+  }
+
+  const result = await service.list({ first: 100 });
+  assert.equal(repositoryInput.limit, 20);
+  assert.deepEqual(result.pageInfo, { endCursor: null, hasNextPage: false });
+});

@@ -1,28 +1,27 @@
-// Reusable button that can render either a native button or a router link.
-import React from 'react';
 import { Link } from 'react-router-dom';
+import type { MouseEventHandler, ReactNode } from 'react';
 
 import './Button.css';
 
 type ButtonProps = {
-  children: React.ReactNode;
+  children: ReactNode;
   design?: string;
   mode?: string;
   link?: string;
   loading?: boolean;
   disabled?: boolean;
   type?: 'button' | 'submit' | 'reset';
-  onClick?: React.MouseEventHandler<HTMLButtonElement>;
+  onClick?: MouseEventHandler<HTMLButtonElement>;
 };
 
-// Renders a styled button or router link depending on the link prop.
 const button = (props: ButtonProps) =>
   !props.link ? (
     <button
       className={['button', `button--${props.design}`, `button--${props.mode}`].join(' ')}
       onClick={props.onClick}
       disabled={props.disabled || props.loading}
-      type={props.type}
+      type={props.type || 'button'}
+      aria-busy={props.loading || undefined}
     >
       {props.loading ? 'Loading...' : props.children}
     </button>

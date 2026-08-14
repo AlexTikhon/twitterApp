@@ -1,6 +1,5 @@
-// Coordinates authentication state and switches between auth routes and feed routes.
 import { useMutation } from '@apollo/client';
-import React, { Fragment, useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 
 import Layout from './components/Layout/Layout';
@@ -16,6 +15,7 @@ import LoginPage from './pages/Auth/Login';
 import SignupPage from './pages/Auth/Signup';
 import { CreateUserDocument, LoginDocument } from './generated/graphql';
 import { useSession } from './hooks/useSession';
+import { usePostsRealtime } from './hooks/usePostsRealtime';
 import { clearSession, saveSession } from './session';
 import { apolloClient } from './apollo';
 
@@ -40,27 +40,30 @@ const App = () => {
     clearSession();
   }, []);
 
+  usePostsRealtime({
+    token: session?.token || null,
+    onError: setError,
+    onUnauthorized: logoutHandler
+  });
+
   useEffect(() => {
     if (!session) {
       void apolloClient.clearStore();
     }
   }, [session]);
 
-  // Opens or closes the mobile navigation and matching backdrop together.
   const mobileNavHandler = (isOpen: boolean) => {
     setShowMobileNav(isOpen);
     setShowBackdrop(isOpen);
   };
 
-  // Closes transient overlay UI and clears the visible error.
   const backdropClickHandler = () => {
     setShowBackdrop(false);
     setShowMobileNav(false);
     setError(null);
   };
 
-  // Sends login credentials to GraphQL and stores the returned session.
-  const loginHandler = async (event: React.FormEvent<HTMLFormElement>, authData: LoginData) => {
+  const loginHandler = async (event: FormEvent<HTMLFormElement>, authData: LoginData) => {
     event.preventDefault();
     setAuthLoading(true);
     try {
@@ -69,35 +72,32 @@ const App = () => {
         throw new Error('Login returned no data.');
       }
 
-      setAuthLoading(false);
       saveSession(data.login.token, data.login.userId, data.login.expiresIn);
     } catch (err) {
-      setAuthLoading(false);
       setError(err instanceof Error ? err : new Error('Login failed.'));
+    } finally {
+      setAuthLoading(false);
     }
   };
 
-  // Creates a user account and sends the user back to the login route.
-  const signupHandler = async (event: React.FormEvent<HTMLFormElement>, authData: SignupData) => {
+  const signupHandler = async (event: FormEvent<HTMLFormElement>, authData: SignupData) => {
     event.preventDefault();
     setAuthLoading(true);
     try {
       await createUser({ variables: authData });
       clearSession();
-      setAuthLoading(false);
       navigate('/');
     } catch (err) {
-      setAuthLoading(false);
       setError(err instanceof Error ? err : new Error('Signup failed.'));
+    } finally {
+      setAuthLoading(false);
     }
   };
 
-  // Clears the global error modal state.
   const errorHandler = () => {
     setError(null);
   };
 
-  // Selects the route tree based on whether the user is authenticated.
   let routes = (
     <Routes>
       <Route path="/" element={<LoginPage onLogin={loginHandler} loading={authLoading} />} />
@@ -109,15 +109,9 @@ const App = () => {
     </Routes>
   );
   if (session) {
-    // Authenticated users can access the feed and individual post pages.
     routes = (
       <Routes>
-        <Route
-          path="/"
-          element={
-            <FeedPage userId={session.userId} token={session.token} onLogout={logoutHandler} />
-          }
-        />
+        <Route path="/" element={<FeedPage userId={session.userId} />} />
         <Route path="/posts/:postId" element={<SinglePostPage />} />
         <Route path="/users/:userId" element={<UserProfilePage currentUserId={session.userId} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
@@ -132,6 +126,7 @@ const App = () => {
         header={
           <Toolbar>
             <MainNavigation
+              mobileNavOpen={showMobileNav}
               onOpenMobileNav={() => mobileNavHandler(true)}
               onLogout={logoutHandler}
               isAuth={Boolean(session)}
@@ -141,7 +136,6 @@ const App = () => {
         mobileNav={
           <MobileNavigation
             open={showMobileNav}
-            mobile
             onChooseItem={() => mobileNavHandler(false)}
             onLogout={logoutHandler}
             isAuth={Boolean(session)}

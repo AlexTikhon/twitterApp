@@ -51,16 +51,19 @@ const UserProfile = ({ currentUserId }: UserProfileProps) => {
         )}
       </header>
       <h2>Posts</h2>
-      {posts.error && <p role="alert">{posts.error.message}</p>}
-      <FeedList
-        posts={posts.posts}
-        loading={posts.loading}
-        userId={currentUserId}
-        hasNextPage={posts.hasNextPage}
-        loadingMore={posts.loadingMore}
-        sentinelRef={sentinelRef}
-        onLoadMore={() => void posts.loadMore()}
-      />
+      {posts.error ? (
+        <p role="alert">{posts.error.message}</p>
+      ) : (
+        <FeedList
+          posts={posts.posts}
+          loading={posts.loading}
+          userId={currentUserId}
+          hasNextPage={posts.hasNextPage}
+          loadingMore={posts.loadingMore}
+          sentinelRef={sentinelRef}
+          onLoadMore={() => void posts.loadMore()}
+        />
+      )}
     </section>
   );
 };

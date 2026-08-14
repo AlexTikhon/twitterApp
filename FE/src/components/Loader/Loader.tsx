@@ -1,11 +1,7 @@
-// Small loading indicator used while feed and modal requests are in flight.
-import React from 'react';
-
 import './Loader.css';
 
-// Renders the four-part loading spinner.
 const loader = () => (
-  <div className="loader">
+  <div className="loader" aria-hidden="true">
     <div />
     <div />
     <div />

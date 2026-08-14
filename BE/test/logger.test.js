@@ -35,7 +35,10 @@ after(async () => {
 
 test('HTTP logger preserves a safe incoming request ID in the response and JSON log', async () => {
   const response = await fetch(`${baseUrl}/ok`, {
-    headers: { 'X-Request-ID': 'edge-request-123' }
+    headers: {
+      Authorization: 'Bearer token-that-must-never-be-logged',
+      'X-Request-ID': 'edge-request-123'
+    }
   });
   const body = await response.json();
   await new Promise((resolve) => setImmediate(resolve));
@@ -48,6 +51,7 @@ test('HTTP logger preserves a safe incoming request ID in the response and JSON 
     .filter(Boolean)
     .map((line) => JSON.parse(line));
   assert.ok(records.some((record) => record.req?.id === 'edge-request-123'));
+  assert.equal(logLines.includes('token-that-must-never-be-logged'), false);
 });
 
 test('HTTP logger replaces an unsafe incoming request ID with a UUID', async () => {

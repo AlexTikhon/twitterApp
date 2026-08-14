@@ -14,7 +14,7 @@ const { loadConfig } = require('./config');
 const { createDependencies } = require('./dependencies');
 const { createLoaders } = require('./graphql/loaders');
 const typeDefs = require('./graphql/schema');
-const resolvers = require('./graphql/resolvers');
+const resolvers = require('./graphql/resolvers/index');
 const { createValidationRules } = require('./graphql/validation');
 const {
   createImageUploadHandler,

@@ -10,10 +10,11 @@ type UploadError = Error & { statusCode?: number };
 export const uploadImage = async (file: File): Promise<string> => {
   const formData = new FormData();
   formData.append('image', file);
+  const token = getSession()?.token;
 
   const response = await fetch(IMAGE_UPLOAD_URL, {
     method: 'POST',
-    headers: getSession()?.token ? { Authorization: `Bearer ${getSession()?.token}` } : {},
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: formData
   });
   const payload = (await response.json()) as Partial<ImageUploadResponse> & {

@@ -1,12 +1,13 @@
+import { useApolloClient } from '@apollo/client';
 import { useEffect, useRef } from 'react';
 import openSocket from 'socket.io-client';
 
 import { API_URL } from '../config';
+import { GetPostsDocument, PostFieldsFragmentDoc } from '../generated/graphql';
 import type { PostsRealtimeEvent } from '../pages/Feed/types';
 
 type UsePostsRealtimeOptions = {
   token: string | null;
-  onEvent: (event: PostsRealtimeEvent) => void;
   onError: (error: Error) => void;
   onUnauthorized: () => void;
 };
@@ -19,22 +20,18 @@ const getEventKey = (event: PostsRealtimeEvent) => {
   return `${event.action}:${event.post._id}:${event.post.updatedAt}`;
 };
 
-export const usePostsRealtime = ({
-  token,
-  onEvent,
-  onError,
-  onUnauthorized
-}: UsePostsRealtimeOptions) => {
+export const usePostsRealtime = ({ token, onError, onUnauthorized }: UsePostsRealtimeOptions) => {
+  const client = useApolloClient();
   const seenEvents = useRef(new Set<string>());
-  const callbacks = useRef({ onEvent, onError, onUnauthorized });
+  const callbacks = useRef({ onError, onUnauthorized });
 
   useEffect(() => {
-    callbacks.current = { onEvent, onError, onUnauthorized };
-  }, [onError, onEvent, onUnauthorized]);
+    callbacks.current = { onError, onUnauthorized };
+  }, [onError, onUnauthorized]);
 
   useEffect(() => {
+    seenEvents.current.clear();
     if (!token) {
-      callbacks.current.onUnauthorized();
       return;
     }
 
@@ -48,7 +45,7 @@ export const usePostsRealtime = ({
 
       callbacks.current.onError(error);
     });
-    socket.on('posts', (event: PostsRealtimeEvent) => {
+    socket.on('posts', async (event: PostsRealtimeEvent) => {
       const eventKey = getEventKey(event);
       if (seenEvents.current.has(eventKey)) {
         return;
@@ -61,11 +58,38 @@ export const usePostsRealtime = ({
           seenEvents.current.delete(oldestKey);
         }
       }
-      callbacks.current.onEvent(event);
+
+      try {
+        if (event.action === 'create') {
+          await client.refetchQueries({ include: [GetPostsDocument] });
+          return;
+        }
+
+        const cacheId = client.cache.identify({ __typename: 'Post', _id: event.post._id });
+        if (!cacheId) {
+          return;
+        }
+
+        if (event.action === 'delete') {
+          client.cache.evict({ id: cacheId });
+          client.cache.gc();
+          return;
+        }
+
+        client.cache.writeFragment({
+          id: cacheId,
+          fragment: PostFieldsFragmentDoc,
+          data: event.post
+        });
+      } catch (error) {
+        callbacks.current.onError(
+          error instanceof Error ? error : new Error('Realtime reconciliation failed.')
+        );
+      }
     });
 
     return () => {
       socket.disconnect();
     };
-  }, [token]);
+  }, [client, token]);
 };

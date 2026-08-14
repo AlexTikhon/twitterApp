@@ -1,5 +1,4 @@
-// Handles the signup form state before App sends the GraphQL mutation.
-import React, { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 
 import Input from '../../components/Form/Input/Input';
 import Button from '../../components/Button/Button';
@@ -14,10 +13,7 @@ type SignupAuthData = {
 
 type SignupProps = {
   loading: boolean;
-  onSignup: (
-    event: React.FormEvent<HTMLFormElement>,
-    authData: SignupAuthData
-  ) => void | Promise<void>;
+  onSignup: (event: FormEvent<HTMLFormElement>, authData: SignupAuthData) => void | Promise<void>;
 };
 
 type Validator = (value: string) => boolean;
@@ -57,7 +53,6 @@ const Signup = (props: SignupProps) => {
   const [signupForm, setSignupForm] = useState(INITIAL_SIGNUP_FORM);
   const formIsValid = Object.values(signupForm).every((field) => field.valid);
 
-  // Updates one signup field and recalculates the form validity.
   const inputChangeHandler = (input: string, value: string) => {
     if (input !== 'email' && input !== 'password' && input !== 'name') {
       return;
@@ -80,7 +75,6 @@ const Signup = (props: SignupProps) => {
     });
   };
 
-  // Marks one signup field as touched after it loses focus.
   const inputBlurHandler = (input: SignupFieldId) => {
     setSignupForm((prevSignupForm) => {
       return {
@@ -93,7 +87,6 @@ const Signup = (props: SignupProps) => {
     });
   };
 
-  // Renders the signup form and delegates submit handling to App.
   return (
     <Auth>
       <form
@@ -109,6 +102,7 @@ const Signup = (props: SignupProps) => {
           id="email"
           label="Your E-Mail"
           type="email"
+          required
           control="input"
           onChange={inputChangeHandler}
           onBlur={() => inputBlurHandler('email')}
@@ -120,6 +114,7 @@ const Signup = (props: SignupProps) => {
           id="name"
           label="Your Name"
           type="text"
+          required
           control="input"
           onChange={inputChangeHandler}
           onBlur={() => inputBlurHandler('name')}
@@ -131,6 +126,7 @@ const Signup = (props: SignupProps) => {
           id="password"
           label="Password"
           type="password"
+          required
           control="input"
           onChange={inputChangeHandler}
           onBlur={() => inputBlurHandler('password')}

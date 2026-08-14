@@ -51,7 +51,7 @@ const wrapper = ({ children }: { children: ReactNode }) => (
 );
 
 describe('useFeedPosts', () => {
-  it('merges cursor pages once and applies realtime cache changes', async () => {
+  it('merges cursor pages once while rejecting duplicate synchronous loads', async () => {
     const { result } = renderHook(() => useFeedPosts(), { wrapper });
 
     await waitFor(() => expect(result.current.posts).toHaveLength(2));
@@ -61,17 +61,9 @@ describe('useFeedPosts', () => {
     await waitFor(() =>
       expect(result.current.posts.map(({ _id }) => _id)).toEqual(['post-3', 'post-2', 'post-1'])
     );
+    expect(result.current.hasNextPage).toBe(false);
 
-    act(() => {
-      result.current.applyRealtimeEvent({ action: 'update', post: post('post-2', 'Updated') });
-    });
-    await waitFor(() => expect(result.current.posts[1].content).toBe('Updated'));
-
-    act(() => {
-      result.current.applyRealtimeEvent({ action: 'delete', post: { _id: 'post-2' } });
-    });
-    await waitFor(() =>
-      expect(result.current.posts.map(({ _id }) => _id)).toEqual(['post-3', 'post-1'])
-    );
+    await act(async () => result.current.loadMore());
+    expect(result.current.posts.map(({ _id }) => _id)).toEqual(['post-3', 'post-2', 'post-1']);
   });
 });

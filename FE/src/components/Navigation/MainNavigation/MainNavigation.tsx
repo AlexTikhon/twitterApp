@@ -1,5 +1,3 @@
-// Desktop navigation bar plus the toggle that opens the mobile menu.
-import React from 'react';
 import { NavLink } from 'react-router-dom';
 
 import MobileToggle from '../MobileToggle/MobileToggle';
@@ -10,14 +8,14 @@ import './MainNavigation.css';
 
 type MainNavigationProps = {
   isAuth: boolean;
+  mobileNavOpen: boolean;
   onOpenMobileNav: () => void;
   onLogout: () => void;
 };
 
-// Renders the desktop nav bar and exposes the mobile menu toggle.
 const mainNavigation = (props: MainNavigationProps) => (
   <nav className="main-nav">
-    <MobileToggle onOpen={props.onOpenMobileNav} />
+    <MobileToggle open={props.mobileNavOpen} onOpen={props.onOpenMobileNav} />
     <div className="main-nav__logo">
       <NavLink to="/">
         <Logo />

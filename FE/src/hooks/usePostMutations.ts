@@ -42,6 +42,13 @@ export const usePostMutations = () => {
   const removePost = (postId: string) =>
     deletePost({
       variables: { id: postId },
+      update: (cache) => {
+        const cacheId = cache.identify({ __typename: 'Post', _id: postId });
+        if (cacheId) {
+          cache.evict({ id: cacheId });
+          cache.gc();
+        }
+      },
       refetchQueries: [GetPostsDocument],
       awaitRefetchQueries: true
     });

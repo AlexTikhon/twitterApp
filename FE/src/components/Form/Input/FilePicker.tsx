@@ -1,21 +1,18 @@
-// Specialized input for selecting an image file in the post editor.
-import React from 'react';
+import type { ChangeEvent, FocusEventHandler } from 'react';
 
 import './Input.css';
 
 type FilePickerProps = {
   id: string;
   label: string;
-  control?: 'input';
   valid?: boolean;
   touched?: boolean;
   onChange: (id: string, value: string, files?: FileList | null) => void;
-  onBlur?: React.FocusEventHandler<HTMLInputElement>;
+  onBlur?: FocusEventHandler<HTMLInputElement>;
 };
 
-// Renders a file input and forwards selected image files to the parent form.
 const filePicker = (props: FilePickerProps) => {
-  const changeHandler = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const changeHandler = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
 
     if (file && !file.type.startsWith('image/')) {
@@ -38,6 +35,7 @@ const filePicker = (props: FilePickerProps) => {
         type="file"
         accept="image/png,image/jpeg"
         id={props.id}
+        aria-invalid={props.touched && props.valid === false}
         onChange={changeHandler}
         onBlur={props.onBlur}
       />

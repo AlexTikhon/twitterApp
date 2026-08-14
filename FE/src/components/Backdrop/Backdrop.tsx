@@ -1,15 +1,12 @@
-// Shared overlay rendered through a portal behind modals and mobile navigation.
-import React from 'react';
 import ReactDOM from 'react-dom';
+import type { MouseEventHandler } from 'react';
 
 import './Backdrop.css';
 
 type BackdropProps = {
-  open?: boolean;
-  onClick?: React.MouseEventHandler<HTMLDivElement>;
+  onClick?: MouseEventHandler<HTMLDivElement>;
 };
 
-// Renders a clickable overlay into the dedicated backdrop portal root.
 const backdrop = (props: BackdropProps) => {
   const backdropRoot = document.getElementById('backdrop-root');
 
@@ -18,7 +15,7 @@ const backdrop = (props: BackdropProps) => {
   }
 
   return ReactDOM.createPortal(
-    <div className={['backdrop', props.open ? 'open' : ''].join(' ')} onClick={props.onClick} />,
+    <div className="backdrop" onClick={props.onClick} aria-hidden="true" />,
     backdropRoot
   );
 };

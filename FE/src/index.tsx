@@ -1,4 +1,3 @@
-// Mounts the React app with routing enabled for the auth and feed pages.
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { ApolloProvider } from '@apollo/client';

@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useState, type FormEvent } from 'react';
 
 import Button from '../../components/Button/Button';
 import ErrorHandler from '../../components/ErrorHandler/ErrorHandler';
@@ -9,20 +9,17 @@ import { useCurrentUserStatus } from '../../hooks/useCurrentUserStatus';
 import { useFeedPosts } from '../../hooks/useFeedPosts';
 import { useInfiniteScroll } from '../../hooks/useInfiniteScroll';
 import { usePostMutations } from '../../hooks/usePostMutations';
-import { usePostsRealtime } from '../../hooks/usePostsRealtime';
 import type { FeedPost } from './types';
 import './Feed.css';
 
 type FeedProps = {
-  token: string | null;
   userId?: string | null;
-  onLogout: () => void;
 };
 
 const asError = (error: unknown, fallback: string) =>
   error instanceof Error ? error : new Error(fallback);
 
-const Feed = ({ token, userId, onLogout }: FeedProps) => {
+const Feed = ({ userId }: FeedProps) => {
   const feed = useFeedPosts();
   const profileStatus = useCurrentUserStatus();
   const postMutations = usePostMutations();
@@ -42,13 +39,6 @@ const Feed = ({ token, userId, onLogout }: FeedProps) => {
     }
   }, [feed.error, profileStatus.error, reportError]);
 
-  usePostsRealtime({
-    token,
-    onEvent: feed.applyRealtimeEvent,
-    onError: reportError,
-    onUnauthorized: onLogout
-  });
-
   const finishEdit = async (postData: PostEditorData) => {
     try {
       await postMutations.savePost(postData, editorPost?._id);
@@ -56,6 +46,7 @@ const Feed = ({ token, userId, onLogout }: FeedProps) => {
       setEditorPost(null);
     } catch (caught) {
       reportError(caught);
+      throw caught;
     }
   };
 
@@ -74,7 +65,7 @@ const Feed = ({ token, userId, onLogout }: FeedProps) => {
     }
   };
 
-  const updateStatus = async (event: React.FormEvent<HTMLFormElement>) => {
+  const updateStatus = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     try {
       await profileStatus.saveStatus();
@@ -101,6 +92,7 @@ const Feed = ({ token, userId, onLogout }: FeedProps) => {
           <Input
             id="status"
             type="text"
+            required
             ariaLabel="Your profile status"
             placeholder="Your status"
             control="input"

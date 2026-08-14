@@ -1,5 +1,4 @@
-// Handles the login form state and delegates the actual request to App.
-import React, { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 
 import Input from '../../components/Form/Input/Input';
 import Button from '../../components/Button/Button';
@@ -13,10 +12,7 @@ type LoginAuthData = {
 
 type LoginProps = {
   loading: boolean;
-  onLogin: (
-    event: React.FormEvent<HTMLFormElement>,
-    authData: LoginAuthData
-  ) => void | Promise<void>;
+  onLogin: (event: FormEvent<HTMLFormElement>, authData: LoginAuthData) => void | Promise<void>;
 };
 
 type Validator = (value: string) => boolean;
@@ -50,7 +46,6 @@ const Login = (props: LoginProps) => {
   const [loginForm, setLoginForm] = useState(INITIAL_LOGIN_FORM);
   const formIsValid = Object.values(loginForm).every((field) => field.valid);
 
-  // Updates one login field and recalculates the form validity.
   const inputChangeHandler = (input: string, value: string) => {
     if (input !== 'email' && input !== 'password') {
       return;
@@ -73,7 +68,6 @@ const Login = (props: LoginProps) => {
     });
   };
 
-  // Marks one login field as touched after it loses focus.
   const inputBlurHandler = (input: LoginFieldId) => {
     setLoginForm((prevLoginForm) => {
       return {
@@ -86,7 +80,6 @@ const Login = (props: LoginProps) => {
     });
   };
 
-  // Renders the login form and delegates submit handling to App.
   return (
     <Auth>
       <form
@@ -101,6 +94,7 @@ const Login = (props: LoginProps) => {
           id="email"
           label="Your E-Mail"
           type="email"
+          required
           control="input"
           onChange={inputChangeHandler}
           onBlur={() => inputBlurHandler('email')}
@@ -112,6 +106,7 @@ const Login = (props: LoginProps) => {
           id="password"
           label="Password"
           type="password"
+          required
           control="input"
           onChange={inputChangeHandler}
           onBlur={() => inputBlurHandler('password')}

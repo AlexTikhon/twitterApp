@@ -1,4 +1,4 @@
-import React, { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 
 import Backdrop from '../../Backdrop/Backdrop';
 import Button from '../../Button/Button';
@@ -61,25 +61,21 @@ const FeedEdit = (props: FeedEditProps) => {
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [removeImage, setRemoveImage] = useState(false);
 
-  const getFormIsValid = (updatedForm: PostForm) => {
-    let nextFormIsValid = true;
-    for (const inputName of Object.keys(updatedForm) as PostFormFieldId[]) {
-      nextFormIsValid = nextFormIsValid && updatedForm[inputName].valid;
-    }
-    return nextFormIsValid;
-  };
+  const formIsValid = Object.values(postForm).every((field) => field.valid);
 
-  const formIsValid = getFormIsValid(postForm);
+  useEffect(
+    () => () => {
+      if (imagePreview?.startsWith('blob:')) {
+        URL.revokeObjectURL(imagePreview);
+      }
+    },
+    [imagePreview]
+  );
 
   useEffect(() => {
     if (props.editing && !props.selectedPost) {
       setPostForm(POST_FORM);
-      setImagePreview((previousPreview) => {
-        if (previousPreview?.startsWith('blob:')) {
-          URL.revokeObjectURL(previousPreview);
-        }
-        return null;
-      });
+      setImagePreview(null);
       setSelectedImage(null);
       setRemoveImage(false);
       return;
@@ -99,12 +95,7 @@ const FeedEdit = (props: FeedEditProps) => {
         }
       };
       setPostForm(postForm);
-      setImagePreview((previousPreview) => {
-        if (previousPreview?.startsWith('blob:')) {
-          URL.revokeObjectURL(previousPreview);
-        }
-        return props.selectedPost?.imageUrl || null;
-      });
+      setImagePreview(props.selectedPost.imageUrl || null);
       setSelectedImage(null);
       setRemoveImage(false);
     }
@@ -122,21 +113,11 @@ const FeedEdit = (props: FeedEditProps) => {
       updatedValue = imageFile.name;
       setSelectedImage(imageFile);
       setRemoveImage(false);
-      setImagePreview((previousPreview) => {
-        if (previousPreview?.startsWith('blob:')) {
-          URL.revokeObjectURL(previousPreview);
-        }
-        return URL.createObjectURL(imageFile);
-      });
+      setImagePreview(URL.createObjectURL(imageFile));
     } else if (input === 'image') {
       updatedValue = '';
       setSelectedImage(null);
-      setImagePreview((previousPreview) => {
-        if (previousPreview?.startsWith('blob:')) {
-          URL.revokeObjectURL(previousPreview);
-        }
-        return null;
-      });
+      setImagePreview(null);
     }
     setPostForm((prevPostForm) => {
       let isValid = true;
@@ -169,31 +150,27 @@ const FeedEdit = (props: FeedEditProps) => {
 
   const cancelPostChangeHandler = () => {
     setPostForm(POST_FORM);
-    setImagePreview((previousPreview) => {
-      if (previousPreview?.startsWith('blob:')) {
-        URL.revokeObjectURL(previousPreview);
-      }
-      return null;
-    });
+    setImagePreview(null);
     setSelectedImage(null);
     setRemoveImage(false);
     props.onCancelEdit();
   };
 
-  const acceptPostChangeHandler = () => {
+  const acceptPostChangeHandler = async () => {
     const post = {
       image: selectedImage,
       content: postForm.content.value,
       removeImage
     };
-    props.onFinishEdit(post);
+
+    try {
+      await props.onFinishEdit(post);
+    } catch {
+      return;
+    }
+
     setPostForm(POST_FORM);
-    setImagePreview((previousPreview) => {
-      if (previousPreview?.startsWith('blob:')) {
-        URL.revokeObjectURL(previousPreview);
-      }
-      return null;
-    });
+    setImagePreview(null);
     setSelectedImage(null);
     setRemoveImage(false);
   };
@@ -212,7 +189,6 @@ const FeedEdit = (props: FeedEditProps) => {
           <FilePicker
             id="image"
             label="Image (optional)"
-            control="input"
             onChange={postInputChangeHandler}
             onBlur={() => inputBlurHandler('image')}
             valid={postForm['image'].valid}
@@ -228,9 +204,6 @@ const FeedEdit = (props: FeedEditProps) => {
               mode="flat"
               design="danger"
               onClick={() => {
-                if (imagePreview.startsWith('blob:')) {
-                  URL.revokeObjectURL(imagePreview);
-                }
                 setImagePreview(null);
                 setSelectedImage(null);
                 setRemoveImage(Boolean(props.selectedPost?.imageUrl));
@@ -243,13 +216,14 @@ const FeedEdit = (props: FeedEditProps) => {
             id="content"
             label="Content"
             control="textarea"
+            required
             rows="5"
             maxLength={500}
             onChange={postInputChangeHandler}
             onBlur={() => inputBlurHandler('content')}
-            valid={postForm['content'].valid}
-            touched={postForm['content'].touched}
-            value={postForm['content'].value}
+            valid={postForm.content.valid}
+            touched={postForm.content.touched}
+            value={postForm.content.value}
           />
           <p className="new-post__character-count" aria-live="polite">
             {postForm.content.value.length}/500

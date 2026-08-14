@@ -1,5 +1,3 @@
-// Builds the nav links based on whether the user is authenticated.
-import React from 'react';
 import { NavLink } from 'react-router-dom';
 
 import './NavigationItems.css';
@@ -17,7 +15,6 @@ type NavigationItemsProps = {
   onLogout: () => void;
 };
 
-// Filters nav links by auth state and appends the logout action when needed.
 const navigationItems = (props: NavigationItemsProps) => (
   <>
     {navItems
@@ -35,8 +32,15 @@ const navigationItems = (props: NavigationItemsProps) => (
         </li>
       ))}
     {props.isAuth && (
-      <li className="navigation-item" key="logout">
-        <button onClick={props.onLogout}>Logout</button>
+      <li className={['navigation-item', props.mobile ? 'mobile' : ''].join(' ')} key="logout">
+        <button
+          onClick={() => {
+            props.onChoose?.();
+            props.onLogout();
+          }}
+        >
+          Logout
+        </button>
       </li>
     )}
   </>

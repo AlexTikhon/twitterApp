@@ -13,7 +13,7 @@ const { MongoMemoryReplSet } = require('mongodb-memory-server');
 const { loadConfig } = require('../config');
 const { createDependencies } = require('../dependencies');
 const { createLoaders } = require('../graphql/loaders');
-const resolvers = require('../graphql/resolvers');
+const resolvers = require('../graphql/resolvers/index');
 const typeDefs = require('../graphql/schema');
 const { createValidationRules } = require('../graphql/validation');
 const Post = require('../models/post');
@@ -265,6 +265,7 @@ test('authenticated user can create, read, update, and delete a post', async () 
 
   assert.equal(deleteResult.body.singleResult.data.deletePost, true);
   assert.equal(await Post.countDocuments(), 0);
+  await assert.rejects(fs.access(path.join(imagesDirectory, path.basename(createdPost.imageUrl))));
 });
 
 test('text-only posts are valid and short-post limits are enforced', async () => {
@@ -474,6 +475,84 @@ test('cursor pagination is stable and creator loading is batched', async () => {
   } finally {
     dependencies.repositories.user.findByIds = originalFindByIds;
   }
+});
+
+test('creator pagination tolerates a deleted cursor post and a newer concurrent insert', async () => {
+  const creator = await User.create({
+    email: 'creator-cursor@example.com',
+    name: 'Creator Cursor User',
+    password: 'not-used-in-this-test'
+  });
+  const otherUser = await User.create({
+    email: 'other-cursor@example.com',
+    name: 'Other Cursor User',
+    password: 'not-used-in-this-test'
+  });
+  const creatorPostIds = [
+    '507f1f77bcf86cd799439021',
+    '507f1f77bcf86cd799439022',
+    '507f1f77bcf86cd799439023',
+    '507f1f77bcf86cd799439024'
+  ];
+  await Post.insertMany([
+    ...creatorPostIds.map((id, index) => ({
+      _id: id,
+      content: `Creator post ${index + 1}`,
+      creator: creator._id,
+      createdAt: new Date(`2026-08-0${index + 1}T12:00:00.000Z`),
+      updatedAt: new Date(`2026-08-0${index + 1}T12:00:00.000Z`)
+    })),
+    {
+      _id: '507f1f77bcf86cd799439025',
+      content: 'Another creator must stay filtered out.',
+      creator: otherUser._id,
+      createdAt: new Date('2026-08-03T18:00:00.000Z'),
+      updatedAt: new Date('2026-08-03T18:00:00.000Z')
+    }
+  ]);
+
+  const query = `
+    query CreatorPosts($creatorId: ID!, $after: String) {
+      posts(first: 2, creatorId: $creatorId, after: $after) {
+        posts { _id }
+        pageInfo { endCursor hasNextPage }
+      }
+    }
+  `;
+  const request = authenticatedRequest(creator._id.toString());
+  const firstResult = await execute(query, { creatorId: creator._id.toString() }, request);
+  const firstPage = firstResult.body.singleResult.data.posts;
+
+  assert.deepEqual(
+    firstPage.posts.map((post) => post._id),
+    [creatorPostIds[3], creatorPostIds[2]]
+  );
+  assert.equal(firstPage.pageInfo.hasNextPage, true);
+
+  await Post.findByIdAndDelete(creatorPostIds[2]);
+  await Post.create({
+    _id: '507f1f77bcf86cd799439026',
+    content: 'Inserted after the first page was read.',
+    creator: creator._id,
+    createdAt: new Date('2026-08-06T12:00:00.000Z'),
+    updatedAt: new Date('2026-08-06T12:00:00.000Z')
+  });
+
+  const secondResult = await execute(
+    query,
+    {
+      creatorId: creator._id.toString(),
+      after: firstPage.pageInfo.endCursor
+    },
+    request
+  );
+  const secondPage = secondResult.body.singleResult.data.posts;
+
+  assert.deepEqual(
+    secondPage.posts.map((post) => post._id),
+    [creatorPostIds[1], creatorPostIds[0]]
+  );
+  assert.equal(secondPage.pageInfo.hasNextPage, false);
 });
 
 test('cursor pagination rejects malformed cursors cleanly', async () => {

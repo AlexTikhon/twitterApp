@@ -12,7 +12,8 @@
   margin: 0.5rem 0;
 }
 
-.navigation-item.mobile a {
+.navigation-item.mobile a,
+.navigation-item.mobile button {
   color: #3b0062;
 }
 
