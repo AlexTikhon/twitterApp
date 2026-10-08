@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 
 import Backdrop from '../../Backdrop/Backdrop';
 import Button from '../../Button/Button';
@@ -25,7 +25,8 @@ type FeedEditProps = {
   selectedPost: FeedEditPost | null;
   loading: boolean;
   onCancelEdit: () => void;
-  onFinishEdit: (post: PostEditorData) => void | Promise<void>;
+  // Resolve `false` when the submission was not performed, so the draft and editor are kept.
+  onFinishEdit: (post: PostEditorData) => void | boolean | Promise<void | boolean>;
 };
 
 type Validator = (value: string) => boolean;
@@ -60,6 +61,8 @@ const FeedEdit = (props: FeedEditProps) => {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [removeImage, setRemoveImage] = useState(false);
+  // Blocks repeated clicks before React re-renders the pending state.
+  const submitting = useRef(false);
 
   const formIsValid = Object.values(postForm).every((field) => field.valid);
 
@@ -157,16 +160,25 @@ const FeedEdit = (props: FeedEditProps) => {
   };
 
   const acceptPostChangeHandler = async () => {
+    if (submitting.current) {
+      return;
+    }
+
     const post = {
       image: selectedImage,
       content: postForm.content.value,
       removeImage
     };
 
+    submitting.current = true;
     try {
-      await props.onFinishEdit(post);
+      if ((await props.onFinishEdit(post)) === false) {
+        return;
+      }
     } catch {
       return;
+    } finally {
+      submitting.current = false;
     }
 
     setPostForm(POST_FORM);

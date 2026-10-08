@@ -33,17 +33,24 @@ const Feed = ({ userId }: FeedProps) => {
     setError(asError(caught, 'Feed request failed.'));
   }, []);
 
+  const feedRefreshHandled = postMutations.refreshing || postMutations.feedRefreshFailed;
   useEffect(() => {
-    if (feed.error || profileStatus.error) {
-      reportError(feed.error || profileStatus.error);
+    // A refresh failing after a committed change is explained by the refresh notice instead.
+    const feedError = feedRefreshHandled ? null : feed.error;
+    if (feedError || profileStatus.error) {
+      reportError(feedError || profileStatus.error);
     }
-  }, [feed.error, profileStatus.error, reportError]);
+  }, [feed.error, feedRefreshHandled, profileStatus.error, reportError]);
 
   const finishEdit = async (postData: PostEditorData) => {
     try {
-      await postMutations.savePost(postData, editorPost?._id);
+      const outcome = await postMutations.savePost(postData, editorPost?._id);
+      if (outcome.status === 'ignored') {
+        return false;
+      }
       setIsEditing(false);
       setEditorPost(null);
+      return true;
     } catch (caught) {
       reportError(caught);
       throw caught;
@@ -87,6 +94,18 @@ const Feed = ({ userId }: FeedProps) => {
         }}
         onFinishEdit={finishEdit}
       />
+      {postMutations.feedRefreshFailed && (
+        <section className="feed__refresh-notice" role="status" aria-label="Feed refresh">
+          <p>Your change was saved, but the feed could not be refreshed.</p>
+          <Button
+            mode="flat"
+            loading={postMutations.refreshing}
+            onClick={() => void postMutations.refreshFeed()}
+          >
+            Refresh feed
+          </Button>
+        </section>
+      )}
       <section className="feed__status" aria-label="Profile status">
         <form onSubmit={updateStatus}>
           <Input

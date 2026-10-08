@@ -12,6 +12,19 @@
   margin: 0 0.5rem;
 }
 
+.feed__refresh-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin: 1rem auto;
+}
+
+.feed__refresh-notice p {
+  margin: 0;
+}
+
 .feed__control {
   text-align: center;
 }

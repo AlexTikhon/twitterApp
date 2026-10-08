@@ -1,11 +1,24 @@
 import { IMAGE_UPLOAD_URL } from '../config';
 import { getSession } from '../session';
 
-type ImageUploadResponse = {
-  uploadId: string;
+type UploadError = Error & { statusCode?: number };
+
+const createUploadError = (message: string, statusCode: number) => {
+  const error = new Error(message) as UploadError;
+  error.statusCode = statusCode;
+  return error;
 };
 
-type UploadError = Error & { statusCode?: number };
+const readJsonObject = async (response: Response): Promise<Record<string, unknown> | null> => {
+  try {
+    const payload: unknown = await response.json();
+    return typeof payload === 'object' && payload !== null && !Array.isArray(payload)
+      ? (payload as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+};
 
 export const uploadImage = async (file: File): Promise<string> => {
   const formData = new FormData();
@@ -17,14 +30,19 @@ export const uploadImage = async (file: File): Promise<string> => {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: formData
   });
-  const payload = (await response.json()) as Partial<ImageUploadResponse> & {
-    message?: string;
-  };
+  const payload = await readJsonObject(response);
 
-  if (!response.ok || !payload.uploadId) {
-    const error = new Error(payload.message || 'Image upload failed.') as UploadError;
-    error.statusCode = response.status;
-    throw error;
+  if (!response.ok) {
+    throw createUploadError(
+      typeof payload?.message === 'string' && payload.message
+        ? payload.message
+        : 'Image upload failed.',
+      response.status
+    );
+  }
+
+  if (typeof payload?.uploadId !== 'string' || payload.uploadId === '') {
+    throw createUploadError('Image upload returned an unexpected response.', response.status);
   }
 
   return payload.uploadId;

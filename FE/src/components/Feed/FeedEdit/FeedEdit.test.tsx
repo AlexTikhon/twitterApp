@@ -28,4 +28,53 @@ describe('FeedEdit', () => {
     expect(content).toHaveValue('Keep this draft.');
     expect(screen.getByRole('dialog', { name: 'New post' })).toBeVisible();
   });
+
+  it('submits once when Accept is clicked repeatedly before the first save settles', async () => {
+    let finishSave: () => void = () => {};
+    const onFinishEdit = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishSave = resolve;
+        })
+    );
+    render(
+      <FeedEdit
+        editing
+        selectedPost={null}
+        loading={false}
+        onCancelEdit={vi.fn()}
+        onFinishEdit={onFinishEdit}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText('Content'), { target: { value: 'Post once.' } });
+    const accept = screen.getByRole('button', { name: 'Accept' });
+    fireEvent.click(accept);
+    fireEvent.click(accept);
+    fireEvent.click(accept);
+
+    expect(onFinishEdit).toHaveBeenCalledOnce();
+
+    finishSave();
+    await waitFor(() => expect(screen.getByLabelText('Content')).toHaveValue(''));
+  });
+
+  it('keeps the draft and the editor open when the parent ignores the submission', async () => {
+    const onFinishEdit = vi.fn().mockResolvedValue(false);
+    render(
+      <FeedEdit
+        editing
+        selectedPost={null}
+        loading={false}
+        onCancelEdit={vi.fn()}
+        onFinishEdit={onFinishEdit}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText('Content'), { target: { value: 'Keep this.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+
+    await waitFor(() => expect(onFinishEdit).toHaveBeenCalledOnce());
+    expect(screen.getByLabelText('Content')).toHaveValue('Keep this.');
+  });
 });
