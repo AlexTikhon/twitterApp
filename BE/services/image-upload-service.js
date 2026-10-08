@@ -1,5 +1,10 @@
+const { randomUUID } = require('node:crypto');
+
 const { createError } = require('../domain/errors');
 const { validateObjectId } = require('../domain/validation');
+
+// A crashed cleanup's claim is retried after this long.
+const CLEANUP_CLAIM_LEASE_MS = 5 * 60 * 1000;
 
 class ImageUploadService {
   constructor({ imageUploadRepository, imageStorage, uploadMaxAgeMs, logger }) {
@@ -58,23 +63,34 @@ class ImageUploadService {
   }
 
   async cleanupExpired() {
-    const expiredUploads = await this.imageUploadRepository.findExpired(new Date());
-    if (expiredUploads.length === 0) {
+    const token = randomUUID();
+    const claimedUploads = await this.imageUploadRepository.claimExpired(new Date(), {
+      token,
+      leaseMs: CLEANUP_CLAIM_LEASE_MS
+    });
+    if (claimedUploads.length === 0) {
       return;
     }
 
     const deletionResults = await Promise.all(
-      expiredUploads.map(async (upload) => ({
+      claimedUploads.map(async (upload) => ({
         id: upload._id,
         deleted: await this.imageStorage.delete(upload.imageUrl)
       }))
     );
-    const deletedUploadIds = deletionResults
+    const deletedIds = deletionResults
       .filter((result) => result.deleted)
       .map((result) => result.id);
+    const failedIds = deletionResults
+      .filter((result) => !result.deleted)
+      .map((result) => result.id);
 
-    if (deletedUploadIds.length > 0) {
-      await this.imageUploadRepository.deleteByIds(deletedUploadIds);
+    if (deletedIds.length > 0) {
+      await this.imageUploadRepository.deleteClaimed(deletedIds, token);
+    }
+    // Keep metadata for uploads whose file could not be removed so a later cleanup retries them.
+    if (failedIds.length > 0) {
+      await this.imageUploadRepository.releaseClaim(failedIds, token);
     }
   }
 }

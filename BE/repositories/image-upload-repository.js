@@ -13,6 +13,7 @@ class ImageUploadRepository {
         _id: id,
         owner,
         consumedAt: null,
+        cleanupClaimedAt: null,
         expiresAt: { $gt: now }
       },
       { $set: { consumedAt: now } },
@@ -24,12 +25,43 @@ class ImageUploadRepository {
     return this.ImageUpload.findByIdAndDelete(id);
   }
 
-  findExpired(now, limit = 100) {
-    return this.ImageUpload.find({ consumedAt: null, expiresAt: { $lte: now } }).limit(limit);
+  // Claims expired, unconsumed uploads for file deletion. The conditional write contends with an
+  // in-flight consumption of the same document, so one of the two always wins. Claims left by a
+  // crashed cleanup become claimable again once they are older than the lease.
+  async claimExpired(now, { token, leaseMs, limit = 100 }) {
+    const claimable = {
+      consumedAt: null,
+      expiresAt: { $lte: now },
+      $or: [
+        { cleanupClaimedAt: null },
+        { cleanupClaimedAt: { $lte: new Date(now.getTime() - leaseMs) } }
+      ]
+    };
+    const candidates = await this.ImageUpload.find(claimable).select('_id').limit(limit).lean();
+    if (candidates.length === 0) {
+      return [];
+    }
+
+    await this.ImageUpload.updateMany(
+      { ...claimable, _id: { $in: candidates.map((candidate) => candidate._id) } },
+      { $set: { cleanupClaimedAt: now, cleanupClaimToken: token } }
+    );
+    return this.ImageUpload.find({ cleanupClaimToken: token, consumedAt: null });
   }
 
-  deleteByIds(ids) {
-    return this.ImageUpload.deleteMany({ _id: { $in: ids }, consumedAt: null });
+  deleteClaimed(ids, token) {
+    return this.ImageUpload.deleteMany({
+      _id: { $in: ids },
+      cleanupClaimToken: token,
+      consumedAt: null
+    });
+  }
+
+  releaseClaim(ids, token) {
+    return this.ImageUpload.updateMany(
+      { _id: { $in: ids }, cleanupClaimToken: token, consumedAt: null },
+      { $set: { cleanupClaimedAt: null, cleanupClaimToken: null } }
+    );
   }
 }
 

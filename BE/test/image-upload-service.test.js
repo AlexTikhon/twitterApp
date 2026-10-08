@@ -8,7 +8,7 @@ test('multipart upload removes the file when metadata persistence fails', async 
   const databaseError = new Error('metadata write failed');
   const service = new ImageUploadService({
     imageUploadRepository: {
-      findExpired: async () => [],
+      claimExpired: async () => [],
       create: async () => {
         throw databaseError;
       }
@@ -30,15 +30,17 @@ test('multipart upload removes the file when metadata persistence fails', async 
   assert.deepEqual(deletedImages, ['/images/uploaded.png']);
 });
 
-test('expired upload cleanup retains metadata when file deletion fails', async () => {
+test('expired upload cleanup releases the claim when file deletion fails', async () => {
   const deletedMetadataIds = [];
+  const releasedIds = [];
   const service = new ImageUploadService({
     imageUploadRepository: {
-      findExpired: async () => [
+      claimExpired: async () => [
         { _id: 'deleted-id', imageUrl: '/images/deleted.png' },
         { _id: 'retry-id', imageUrl: '/images/retry.png' }
       ],
-      deleteByIds: async (ids) => deletedMetadataIds.push(...ids)
+      deleteClaimed: async (ids) => deletedMetadataIds.push(...ids),
+      releaseClaim: async (ids) => releasedIds.push(...ids)
     },
     imageStorage: {
       delete: async (imageUrl) => imageUrl.endsWith('deleted.png')
@@ -48,4 +50,5 @@ test('expired upload cleanup retains metadata when file deletion fails', async (
 
   await service.cleanupExpired();
   assert.deepEqual(deletedMetadataIds, ['deleted-id']);
+  assert.deepEqual(releasedIds, ['retry-id']);
 });
