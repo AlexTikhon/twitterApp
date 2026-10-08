@@ -22,7 +22,7 @@ const createDependencies = (config, connection = mongoose.connection, logger) =>
   const imageStorage = new LocalImageStorage(config.storage, logger);
   const postRealtime = new PostRealtime({
     postRepository,
-    getIo: socket.getIo,
+    broadcast: socket.emitToAuthorized,
     logger
   });
 
