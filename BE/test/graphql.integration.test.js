@@ -12,6 +12,7 @@ const { MongoMemoryReplSet } = require('mongodb-memory-server');
 
 const { loadConfig } = require('../config');
 const { createDependencies } = require('../dependencies');
+const { createAuthBudget } = require('../graphql/auth-budget');
 const { createLoaders } = require('../graphql/loaders');
 const resolvers = require('../graphql/resolvers/index');
 const typeDefs = require('../graphql/schema');
@@ -59,6 +60,7 @@ const execute = (query, variables = {}, req = { isAuth: false }) =>
       contextValue: {
         req,
         services: dependencies.services,
+        authBudget: createAuthBudget(),
         loaders: createLoaders(dependencies.repositories)
       }
     }
@@ -587,4 +589,23 @@ test('feed sort uses the compound timeline index according to explain', async ()
 
   assert.match(serializedPlan, /IXSCAN/);
   assert.match(serializedPlan, /createdAt_-1__id_-1/);
+});
+
+test('a request with many aliased logins is rejected before any password is checked', async () => {
+  const email = 'batch@example.com';
+  await createUser(email);
+  const aliases = Array.from(
+    { length: 100 },
+    (_value, index) => `a${index}: login(email: "${email}", password: "secure-password") { token }`
+  );
+
+  const result = await execute(`mutation { ${aliases.join('\n')} }`);
+
+  assert.equal(result.body.kind, 'single');
+  assert.equal(result.body.singleResult.data, undefined);
+  assert.ok(
+    result.body.singleResult.errors.some((error) =>
+      /at most one authentication/i.test(error.message)
+    )
+  );
 });

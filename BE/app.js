@@ -12,6 +12,7 @@ const mongoose = require('mongoose');
 
 const { loadConfig } = require('./config');
 const { createDependencies } = require('./dependencies');
+const { createAuthBudget } = require('./graphql/auth-budget');
 const { createLoaders } = require('./graphql/loaders');
 const typeDefs = require('./graphql/schema');
 const resolvers = require('./graphql/resolvers/index');
@@ -197,6 +198,7 @@ const startServer = async ({ env = process.env, loggerDestination } = {}) => {
         context: async ({ req }) => ({
           req,
           services: dependencies.services,
+          authBudget: createAuthBudget(),
           loaders: createLoaders(dependencies.repositories)
         })
       })
